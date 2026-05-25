@@ -1,29 +1,35 @@
+import Link from "next/link"
 import {
   ArrowRight,
   Circle,
-  Compass,
-  GitBranch,
   Globe2,
+  GitBranch,
   Lock,
   Mail,
   Pin,
-  Shield,
   type LucideIcon,
 } from "lucide-react"
 import { CinematicProductFrame } from "@/components/marketing/cinematic-product-frame"
 import { ModeToggle } from "@/components/marketing/mode-toggle"
-import { WordsPullUp } from "@/components/motion/words-pull-up"
+import { SkipLink } from "@/components/layout/skip-link"
+import { VisiblLogo } from "@/components/layout/visibl-logo"
 import { Button } from "@/components/ui/button"
-import { footerLinks, navItems } from "@/features/landing/data/landing"
+import { layout, typography } from "@/config/tokens"
+import { siteConfig } from "@/config/site"
+import { LandingFaqAccordion } from "@/features/landing/components/landing-faq-accordion"
+import { LandingMobileNav } from "@/features/landing/components/landing-mobile-nav"
+import {
+  footerLinks,
+  metrics,
+  navItems,
+  narrativeFeatures,
+  philosophyBullets,
+  v1Capabilities,
+  workflowSteps,
+} from "@/features/landing/data/landing"
+import { cn } from "@/lib/utils"
 
-const steps = [
-  ["Context", "Talk through the messy version."],
-  ["Map", "Fields and assumptions become visible."],
-  ["Gate", "Artifacts wait for usable evidence."],
-  ["Share", "Feedback returns as the next input."],
-]
-
-const rails = [
+const futureRails = [
   [Pin, "Memory pins", "Facts and assumptions stay inspectable."],
   [Lock, "Evidence gates", "Weak claims do not ship as truth."],
   [GitBranch, "Idea commits", "Pivots become a visible trail."],
@@ -32,13 +38,15 @@ const rails = [
 
 export function LandingPage() {
   return (
-    <div className="bg-background text-foreground min-h-screen overflow-hidden">
+    <div className="bg-background text-foreground min-h-screen">
+      <SkipLink />
       <AtmosphericNavbar />
-      <main>
+      <main id="main-content">
         <HeroSection />
-        <FlowSection />
-        <SystemSection />
-        <MemoSection />
+        <ProductSection />
+        <WorkflowSection />
+        <ProofSection />
+        <PhilosophySection />
         <FinalCtaSection />
       </main>
       <Footer />
@@ -48,27 +56,19 @@ export function LandingPage() {
 
 function AtmosphericNavbar() {
   return (
-    <header className="fixed inset-x-0 top-4 z-50 px-4">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#090b10]/88 backdrop-blur-xl">
       <nav
         aria-label="Primary"
-        className="mx-auto flex h-13 max-w-5xl items-center justify-between rounded-full border border-slate-950/10 bg-white/74 px-2.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#090b11]/72"
+        className={`mx-auto flex h-14 ${layout.maxWidth} items-center justify-between gap-4 ${layout.containerPadding}`}
       >
-        <a
-          href="#top"
-          className="flex items-center gap-3 rounded-full pr-3 pl-1 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:outline-none"
-        >
-          <span className="grid size-9 place-items-center rounded-full bg-slate-950 text-white dark:bg-white dark:text-slate-950">
-            <Compass className="size-4" aria-hidden="true" />
-          </span>
-          <span className="font-semibold tracking-tight">Visibl</span>
-        </a>
+        <VisiblLogo href="/" inverted />
 
         <div className="hidden items-center gap-1 md:flex">
-          {navItems.slice(0, 3).map((item) => (
+          {navItems.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="text-muted-foreground hover:text-foreground rounded-full px-3 py-2 text-sm font-medium transition hover:bg-slate-950/5 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:outline-none dark:hover:bg-white/8"
+              className="text-white/72 hover:text-white rounded-md px-3 py-2 text-sm font-medium transition focus-visible:ring-2 focus-visible:ring-cyan-400/60 focus-visible:outline-none"
             >
               {item.label}
             </a>
@@ -76,16 +76,25 @@ function AtmosphericNavbar() {
         </div>
 
         <div className="flex items-center gap-2">
+          <LandingMobileNav />
           <ModeToggle />
           <Button
             asChild
+            variant="outline"
             size="sm"
-            className="hidden rounded-full bg-slate-950 px-4 text-white hover:bg-slate-800 md:inline-flex dark:bg-white dark:text-slate-950"
+            className="hidden rounded-md border-white/16 bg-transparent text-white hover:bg-white/10 hover:text-white md:inline-flex"
           >
-            <a href="#cta">
-              Request access
+            <Link href="/login">Sign in</Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            className="hidden rounded-md bg-white px-4 font-medium text-[#090b10] hover:bg-cyan-50 sm:inline-flex"
+          >
+            <Link href="/login">
+              Open workspace
               <ArrowRight className="size-3.5" aria-hidden="true" />
-            </a>
+            </Link>
           </Button>
         </div>
       </nav>
@@ -95,50 +104,44 @@ function AtmosphericNavbar() {
 
 function HeroSection() {
   return (
-    <section id="top" className="relative isolate overflow-hidden pt-24">
-      <Atmosphere />
-      <div className="relative z-10 mx-auto max-w-7xl px-4 pt-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
-        <div className="mx-auto max-w-4xl text-center">
-          <p className="mx-auto w-fit rounded-full border border-white/35 bg-white/28 px-4 py-1.5 text-xs font-medium text-white/92 shadow-sm backdrop-blur">
-            Evidence-structured founder workspace
-          </p>
-          <h1 className="text-shadow-dusk mt-7 font-serif text-[clamp(3.45rem,7.6vw,7rem)] leading-[0.88] tracking-normal text-balance text-white">
-            <WordsPullUp
-              text="Build the startup story you can defend."
-              className="justify-center"
-            />
+    <section
+      id="top"
+      className="technical-hero landing-section relative isolate overflow-hidden pb-16 pt-24 text-white sm:pb-20 sm:pt-28"
+    >
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-[var(--background)]" />
+      <div className={`relative z-10 mx-auto ${layout.maxWidth} ${layout.containerPadding}`}>
+        <div className="mx-auto max-w-3xl text-center">
+          <p className={cn(typography.eyebrow, "text-white/60")}>Evidence workspace</p>
+          <h1 className={cn(typography.h1, "mt-5 text-white")}>
+            Build the startup story you can defend.
           </h1>
-          <div className="relative z-10 mt-8 sm:mt-10 lg:mt-12">
-            <HeroSignalMap />
-            <p className="mx-auto mt-6 max-w-2xl text-base leading-8 font-medium text-pretty text-white/84 sm:text-lg">
-              Visibl turns raw notes, investor questions, and shifting
-              assumptions into a live company map, proof-gated artifacts, and
-              one page you can share with confidence.
-            </p>
-            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button
-                asChild
-                size="lg"
-                className="h-12 rounded-full bg-white px-6 text-slate-950 shadow-[0_18px_55px_rgba(255,255,255,0.22)] hover:bg-cyan-50"
-              >
-                <a href="#flow">
-                  Watch the loop
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </a>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="h-12 rounded-full border-white/32 bg-white/10 px-6 text-white backdrop-blur hover:bg-white/18 hover:text-white"
-              >
-                <a href="#system">See the system</a>
-              </Button>
-            </div>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/75 sm:text-lg">
+            {siteConfig.description} Sign in, open a project, and work through customer
+            problem, validation, and proof in one workspace.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button
+              asChild
+              size="lg"
+              className="h-11 rounded-md bg-white px-5 text-[#090b10] hover:bg-cyan-50"
+            >
+              <Link href="/login">
+                Continue with Google
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-11 rounded-md border-white/18 bg-white/6 px-5 text-white hover:bg-white/10"
+            >
+              <a href="#workflow">See the workflow</a>
+            </Button>
           </div>
         </div>
 
-        <div className="mt-10 sm:mt-12">
+        <div className="mt-12">
           <CinematicProductFrame />
         </div>
       </div>
@@ -146,115 +149,96 @@ function HeroSection() {
   )
 }
 
-function HeroSignalMap() {
-  return (
-    <div
-      aria-hidden="true"
-      className="relative mx-auto hidden h-24 max-w-3xl sm:block"
-    >
-      <div className="absolute top-1/2 left-1/2 h-22 w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/16 bg-white/[0.035] shadow-[inset_0_0_50px_rgba(255,255,255,0.08)]" />
-      <div className="absolute inset-x-16 top-1/2 h-px bg-gradient-to-r from-transparent via-white/55 to-transparent" />
-      <div className="absolute top-[18%] left-[30%] h-px w-[22%] rotate-[-14deg] bg-gradient-to-r from-transparent via-cyan-100/55 to-transparent" />
-      <div className="absolute top-[68%] right-[25%] h-px w-[20%] rotate-[14deg] bg-gradient-to-r from-transparent via-cyan-100/55 to-transparent" />
-      <div className="absolute top-1/2 left-[18%] size-2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_28px_rgba(255,255,255,0.9)]" />
-      <div className="absolute top-[22%] left-[36%] size-1.5 rounded-full bg-cyan-100 shadow-[0_0_22px_rgba(207,250,254,0.85)]" />
-      <div className="absolute top-[58%] left-[50%] size-2 rounded-full bg-white shadow-[0_0_28px_rgba(255,255,255,0.9)]" />
-      <div className="absolute top-[30%] right-[28%] size-1.5 rounded-full bg-cyan-100 shadow-[0_0_22px_rgba(207,250,254,0.85)]" />
-      <div className="absolute top-1/2 right-[15%] size-2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_28px_rgba(255,255,255,0.9)]" />
-      <div className="absolute top-[18%] left-[22%] rounded-full border border-white/28 bg-white/10 px-3 py-1 text-[10px] font-medium tracking-[0.18em] text-white/72 uppercase backdrop-blur">
-        context
-      </div>
-      <div className="absolute top-[62%] left-[42%] rounded-full border border-white/28 bg-white/10 px-3 py-1 text-[10px] font-medium tracking-[0.18em] text-white/72 uppercase backdrop-blur">
-        proof
-      </div>
-      <div className="absolute top-[16%] right-[18%] rounded-full border border-white/28 bg-white/10 px-3 py-1 text-[10px] font-medium tracking-[0.18em] text-white/72 uppercase backdrop-blur">
-        page
-      </div>
-    </div>
-  )
-}
-
-function Atmosphere() {
-  return (
-    <div aria-hidden="true" className="absolute inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,#415ee5_0%,#768cf0_30%,#c578b9_70%,#fbfaf6_100%)] dark:bg-[linear-gradient(180deg,#030712_0%,#101735_40%,#311426_76%,#08070a_100%)]" />
-      <div className="star-field absolute inset-0 opacity-48" />
-      <div className="absolute inset-x-[-18%] bottom-[-2%] h-[22vw] min-h-64 rounded-[50%_50%_0_0] bg-[linear-gradient(180deg,rgba(8,71,82,0.18),rgba(3,28,36,0.68)_54%,rgba(3,28,36,0))] [mask-image:linear-gradient(180deg,transparent_0%,black_24%,black_58%,transparent_100%)] opacity-90 dark:bg-[linear-gradient(180deg,rgba(16,105,118,0.16),rgba(2,8,16,0.74)_58%,rgba(2,8,16,0))]" />
-      <div className="absolute inset-x-[-8%] bottom-[-18rem] h-[34rem] bg-[radial-gradient(ellipse_at_50%_18%,rgba(251,250,246,0.2),transparent_42%),linear-gradient(180deg,rgba(251,250,246,0)_0%,rgba(251,250,246,0.44)_34%,rgba(251,250,246,0.88)_70%,#fbfaf6_100%)] dark:bg-[radial-gradient(ellipse_at_50%_18%,rgba(8,7,10,0.18),transparent_42%),linear-gradient(180deg,rgba(8,7,10,0)_0%,rgba(8,7,10,0.44)_34%,rgba(8,7,10,0.88)_70%,#08070a_100%)]" />
-      <div className="noise-layer absolute inset-0 opacity-[0.13]" />
-    </div>
-  )
-}
-
-function FlowSection() {
+function ProductSection() {
   return (
     <section
-      id="flow"
-      className="bg-background px-4 py-40 sm:px-6 sm:py-48 lg:px-8"
+      id="product"
+      className={cn("landing-section bg-background", layout.containerPadding, layout.landingSection)}
     >
-      <div className="mx-auto grid max-w-7xl gap-16 lg:grid-cols-[0.62fr_1.38fr] lg:items-center xl:gap-20">
+      <div className={`mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:items-start`}>
         <div>
-          <p className="text-sm font-semibold tracking-[0.16em] text-cyan-600 uppercase dark:text-cyan-300">
-            Product flow
-          </p>
-          <h2 className="mt-4 max-w-xl font-serif text-[clamp(3rem,6vw,5rem)] leading-[0.94] tracking-normal">
-            The page starts with the software moving.
+          <p className={typography.eyebrow}>In the product today</p>
+          <h2 className={cn(typography.h2, "mt-3")}>
+            A founder workspace you can sign into now.
           </h2>
-          <p className="text-muted-foreground mt-6 max-w-md text-base leading-8">
-            The loop is built in HTML, CSS, and React state so it can become the
-            real product video later.
+          <p className={cn(typography.lead, "mt-4")}>
+            v1 ships the core loop: Google sign-in, a projects dashboard, and a
+            three-column workspace with streaming chat, memory pins, and a
+            problem-and-customer checklist that fills in as you talk.
           </p>
-        </div>
-        <div className="lg:pl-6">
-          <CinematicProductFrame />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function SystemSection() {
-  return (
-    <section id="system" className="px-4 py-44 sm:px-6 sm:py-56 lg:px-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <p className="text-sm font-semibold tracking-[0.16em] text-rose-500 uppercase">
-              System
-            </p>
-            <h2 className="mt-4 max-w-xl font-serif text-[clamp(3rem,6vw,5rem)] leading-[0.94] tracking-normal">
-              Four product rules. No filler.
-            </h2>
-          </div>
-          <div className="border-border border-y">
-            {steps.map(([label, text]) => (
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {metrics.map((metric) => (
               <div
-                key={label}
-                className="border-border grid gap-5 border-b py-6 last:border-b-0 sm:grid-cols-[0.28fr_0.72fr]"
+                key={metric.label}
+                className="border-border/70 rounded-lg border px-3 py-3"
               >
-                <p className="text-muted-foreground font-mono text-xs">
-                  {label}
-                </p>
-                <p className="text-xl leading-8 font-semibold tracking-tight">
-                  {text}
+                <p className="text-xl font-semibold tabular-nums">{metric.value}</p>
+                <p className="text-muted-foreground mt-1 text-xs leading-5">
+                  {metric.label}
                 </p>
               </div>
             ))}
           </div>
         </div>
+        <CinematicProductFrame />
+      </div>
 
-        <div className="border-border mt-32 grid gap-12 border-t pt-16 sm:grid-cols-2 lg:grid-cols-4">
-          {rails.map(([Icon, title, text]) => (
-            <div key={title} className="max-w-xs">
-              <span className="bg-foreground text-background grid size-10 place-items-center rounded-full">
-                <Icon className="size-4" aria-hidden="true" />
-              </span>
-              <h3 className="mt-5 text-xl font-semibold tracking-tight">
-                {title}
-              </h3>
-              <p className="text-muted-foreground mt-3 text-sm leading-7">
-                {text}
-              </p>
+      <div className="mx-auto mt-12 grid max-w-6xl gap-4 sm:grid-cols-2">
+        {v1Capabilities.map((capability) => (
+          <article
+            key={capability.title}
+            className="border-border/70 bg-card rounded-lg border p-5"
+          >
+            <capability.icon className="text-muted-foreground size-5" aria-hidden="true" />
+            <h3 className="mt-4 text-lg font-semibold tracking-tight">
+              {capability.title}
+            </h3>
+            <p className="text-muted-foreground mt-2 text-sm leading-7">
+              {capability.description}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function WorkflowSection() {
+  return (
+    <section
+      id="workflow"
+      className={cn("landing-section border-border/70 border-t", layout.containerPadding, layout.landingSection)}
+    >
+      <div className="mx-auto max-w-6xl">
+        <div className="max-w-2xl">
+          <p className={typography.eyebrow}>Workflow</p>
+          <h2 className={cn(typography.h2, "mt-3")}>
+            From messy context to a map you can challenge.
+          </h2>
+          <p className={cn(typography.lead, "mt-4")}>
+            The full Visibl arc runs from raw founder notes to hosted proof. v1
+            starts with intake: conversation, pins, and the problem-and-customer doc.
+          </p>
+        </div>
+
+        <div className="border-border mt-10 border-y">
+          {workflowSteps.map((step, index) => (
+            <div
+              key={step.title}
+              className="border-border grid gap-4 border-b py-6 last:border-b-0 sm:grid-cols-[5rem_1fr]"
+            >
+              <div>
+                <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+              </div>
+              <div>
+                <p className={typography.eyebrow}>{step.eyebrow}</p>
+                <h3 className="mt-2 text-lg font-semibold tracking-tight">{step.title}</h3>
+                <p className="text-muted-foreground mt-2 text-sm leading-7">
+                  {step.description}
+                </p>
+              </div>
             </div>
           ))}
         </div>
@@ -263,18 +247,93 @@ function SystemSection() {
   )
 }
 
-function MemoSection() {
+function ProofSection() {
   return (
-    <section className="px-4 py-44 sm:px-6 sm:py-56 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        <div className="relative rotate-[-0.7deg] rounded-[1.4rem] border border-slate-200 bg-white p-8 shadow-[0_45px_110px_rgba(32,42,62,0.13)] sm:p-12 dark:border-white/10 dark:bg-[#10141f] dark:text-white">
-          <div className="absolute -inset-3 -z-10 rotate-[1.2deg] rounded-[1.4rem] bg-slate-200/45 dark:bg-cyan-300/8" />
-          <p className="font-mono text-sm text-slate-500 dark:text-slate-400">
-            Founder memo
-          </p>
-          <h2 className="mt-8 max-w-4xl font-serif text-[clamp(3rem,6vw,5.4rem)] leading-[0.92] tracking-normal">
+    <section
+      id="proof"
+      className={cn("landing-section bg-background", layout.containerPadding, layout.landingSection)}
+    >
+      <div className="mx-auto max-w-6xl">
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
+          <div>
+            <p className={typography.eyebrow}>Why Visibl</p>
+            <h2 className={cn(typography.h2, "mt-3")}>
+              Not another chatbot with a prettier export button.
+            </h2>
+            <p className={cn(typography.lead, "mt-4")}>
+              General chat can produce good text. Visibl keeps field states,
+              memory pins, artifact gates, and version history as durable
+              product surfaces — not buried prompts.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {narrativeFeatures.map((feature) => (
+              <article
+                key={feature.title}
+                className="border-border/70 rounded-lg border px-4 py-4"
+              >
+                <feature.icon
+                  className="text-muted-foreground size-5"
+                  aria-hidden="true"
+                />
+                <h3 className="mt-3 text-lg font-semibold tracking-tight">
+                  {feature.title}
+                </h3>
+                <p className="text-muted-foreground mt-2 text-sm leading-7">
+                  {feature.description}
+                </p>
+                <p className="text-muted-foreground/80 mt-2 text-sm leading-7">
+                  {feature.detail}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-border mt-12 grid gap-8 border-t pt-10 sm:grid-cols-2 lg:grid-cols-4">
+          {futureRails.map(([Icon, title, text]) => (
+            <div key={title}>
+              <Icon className="text-muted-foreground size-5" aria-hidden="true" />
+              <h3 className="mt-3 text-base font-semibold tracking-tight">{title}</h3>
+              <p className="text-muted-foreground mt-2 text-sm leading-7">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PhilosophySection() {
+  return (
+    <section
+      id="philosophy"
+      className={cn("landing-section border-border/70 border-t", layout.containerPadding, layout.landingSection)}
+    >
+      <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2">
+        <div className="border-border/70 bg-card rounded-lg border p-6 sm:p-8">
+          <p className={typography.eyebrow}>Founder philosophy</p>
+          <h2 className={cn(typography.h2, "mt-3 text-2xl sm:text-3xl")}>
             A clearer company story starts with knowing what is still unproven.
           </h2>
+          <ul className="mt-6 space-y-3">
+            {philosophyBullets.map((bullet) => (
+              <li key={bullet} className="flex gap-3 text-sm leading-7">
+                <Circle className="text-muted-foreground mt-2 size-1.5 shrink-0 fill-current" aria-hidden="true" />
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <p className={typography.eyebrow}>Questions</p>
+          <h3 className={cn(typography.h2, "mt-3 text-2xl sm:text-3xl")}>
+            What founders ask first
+          </h3>
+          <div className="mt-6">
+            <LandingFaqAccordion />
+          </div>
         </div>
       </div>
     </section>
@@ -285,31 +344,31 @@ function FinalCtaSection() {
   return (
     <section
       id="cta"
-      className="relative isolate overflow-hidden px-4 py-32 text-center sm:px-6 sm:py-44 lg:px-8"
+      className={cn(
+        "landing-section border-border/70 bg-muted/20 border-y text-center",
+        layout.containerPadding,
+        layout.landingSection,
+      )}
     >
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,transparent,#435fe2_36%,#d56fa9_100%)] dark:bg-[linear-gradient(180deg,transparent,#0a1430_36%,#301323_100%)]" />
-      <div className="absolute inset-x-0 top-0 -z-10 h-44 bg-[linear-gradient(180deg,var(--background)_0%,color-mix(in_oklab,var(--background)_72%,transparent)_34%,transparent_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 -z-10 h-52 bg-[linear-gradient(180deg,transparent_0%,color-mix(in_oklab,var(--background)_34%,transparent)_42%,var(--background)_100%)]" />
-      <div
-        className="star-field absolute inset-0 -z-10 opacity-35"
-        aria-hidden="true"
-      />
-      <div className="mx-auto max-w-4xl text-white">
-        <h2 className="font-serif text-[clamp(3.8rem,8vw,7rem)] leading-[0.88] tracking-normal">
-          Build the page after the truth has a shape.
+      <div className="mx-auto max-w-3xl">
+        <p className={typography.eyebrow}>Get started</p>
+        <h2 className={cn(typography.h2, "mt-3")}>
+          Open a project and start the intake conversation.
         </h2>
-        <p className="mx-auto mt-7 max-w-xl text-base leading-8 text-white/82">
-          Map the assumptions. Gate the artifacts. Publish the version that can
-          survive a real conversation.
+        <p className={cn(typography.lead, "mx-auto mt-4 max-w-xl")}>
+          Sign in with Google, create a project, and let Visibl capture memory
+          pins and problem-and-customer progress while you talk.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Button
-            asChild
-            size="lg"
-            className="h-12 rounded-full bg-white px-6 text-slate-950 hover:bg-cyan-50"
-          >
-            <a href="mailto:hello@visibl.me">
-              Request beta access
+          <Button asChild size="lg" className="h-11 rounded-md px-5">
+            <Link href="/login">
+              Open workspace
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="h-11 rounded-md px-5">
+            <a href={`mailto:${siteConfig.supportEmail}`}>
+              Talk to us
               <Mail className="size-4" aria-hidden="true" />
             </a>
           </Button>
@@ -320,32 +379,65 @@ function FinalCtaSection() {
 }
 
 function Footer() {
+  const productLinks = footerLinks.filter((link) => link.href.startsWith("#"))
+  const accountLinks = footerLinks.filter((link) => link.href.startsWith("/"))
+
   return (
-    <footer className="bg-background px-4 py-12 sm:px-6 lg:px-8">
-      <div className="border-border mx-auto grid max-w-6xl gap-8 border-t pt-8 md:grid-cols-[1fr_auto] md:items-start">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="bg-foreground text-background grid size-9 place-items-center rounded-full">
-              <Shield className="size-4" aria-hidden="true" />
-            </span>
-            <span className="font-semibold tracking-tight">Visibl</span>
+    <footer className={cn("bg-muted/30", layout.containerPadding, "py-10")}>
+      <div className="border-border mx-auto max-w-6xl border-t pt-8">
+        <div className="grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
+          <div>
+            <VisiblLogo href="/" />
+            <p className="text-muted-foreground mt-4 max-w-md text-sm leading-7">
+              {siteConfig.description}
+            </p>
           </div>
-          <p className="text-muted-foreground mt-5 max-w-md text-sm leading-7">
-            Evidence-structured founder workspace.
-          </p>
+
+          <div>
+            <p className="text-sm font-semibold">Product</p>
+            <ul className="mt-4 space-y-3">
+              {productLinks.map((link) => (
+                <li key={link.href}>
+                  <a
+                    href={link.href}
+                    className="text-muted-foreground hover:text-foreground text-sm transition focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:outline-none"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold">Get started</p>
+            <ul className="mt-4 space-y-3">
+              {accountLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-foreground text-sm transition focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:outline-none"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <a
+                  href={`mailto:${siteConfig.supportEmail}`}
+                  className="text-muted-foreground hover:text-foreground text-sm transition focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:outline-none"
+                >
+                  Contact founders
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-4">
-          {footerLinks.slice(0, 4).map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm transition focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:outline-none"
-            >
-              <Circle className="size-1.5 fill-current" />
-              {link.label}
-            </a>
-          ))}
-        </div>
+
+        <p className="text-muted-foreground mt-10 text-xs">
+          © {new Date().getFullYear()} {siteConfig.name}. Evidence-structured
+          founder workspace.
+        </p>
       </div>
     </footer>
   )

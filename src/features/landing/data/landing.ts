@@ -40,10 +40,10 @@ export type NarrativeFeature = {
 }
 
 export const navItems = [
-  { label: "Product", href: "#product" },
-  { label: "Workflow", href: "#workflow" },
-  { label: "Proof", href: "#proof" },
-  { label: "Philosophy", href: "#philosophy" },
+  { index: "01", label: "Product", href: "#product" },
+  { index: "02", label: "Workflow", href: "#workflow" },
+  { index: "03", label: "Proof", href: "#proof" },
+  { index: "04", label: "Philosophy", href: "#philosophy" },
 ] as const
 
 export const heroStats = [
@@ -199,11 +199,38 @@ export const faqItems = [
   },
 ]
 
+export const v1Capabilities = [
+  {
+    title: "Project workspaces",
+    description:
+      "Each startup gets its own project with conversations, memory pins, and a living problem-and-customer doc.",
+    icon: Layers3,
+  },
+  {
+    title: "Streaming intake chat",
+    description:
+      "Talk through the messy version. The assistant captures facts, updates checklist sections, and pins what matters.",
+    icon: MessageSquareText,
+  },
+  {
+    title: "Memory pins",
+    description:
+      "Metrics and notes surface in the sidebar as the conversation progresses — inspectable, not buried in chat history.",
+    icon: Pin,
+  },
+  {
+    title: "Problem & customer doc",
+    description:
+      "Eight checklist sections track target customer, severity, willingness to pay, and early validation with visible completion.",
+    icon: Target,
+  },
+] as const
+
 export const footerLinks = [
   { label: "Product", href: "#product" },
   { label: "Workflow", href: "#workflow" },
   { label: "Proof", href: "#proof" },
-  { label: "Contact", href: "mailto:hello@visibl.me" },
+  { label: "Sign in", href: "/login" },
 ]
 
 export const demoPins = [

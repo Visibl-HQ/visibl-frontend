@@ -154,6 +154,7 @@
   html {
     @apply font-sans;
     scroll-behavior: smooth;
+    scroll-padding-top: 4.5rem;
   }
   ::selection {
     @apply bg-brand/20 text-foreground;
@@ -204,6 +205,69 @@
     );
     background-size: 5px 5px;
     mix-blend-mode: overlay;
+  }
+
+  .app-frame-bg {
+    background-color: var(--background);
+    background-image:
+      linear-gradient(to right, rgb(148 163 184 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(148 163 184 / 0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .dark .app-frame-bg {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  }
+
+  .landing-section {
+    scroll-margin-top: 4.5rem;
+  }
+
+  .chat-panel-bg {
+    background-color: var(--background);
+    background-image:
+      linear-gradient(to right, rgb(148 163 184 / 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(148 163 184 / 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .dark .chat-panel-bg {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  }
+
+  .chat-panel-scroll {
+    scrollbar-gutter: stable;
+  }
+
+  .chat-panel-scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .chat-panel-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+    background-clip: padding-box;
+  }
+
+  .technical-hero {
+    background-color: #090b10;
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      radial-gradient(
+        ellipse 80% 55% at 50% -10%,
+        rgb(94 184 212 / 0.18),
+        transparent 60%
+      );
+    background-size:
+      28px 28px,
+      28px 28px,
+      auto;
   }
 }
 

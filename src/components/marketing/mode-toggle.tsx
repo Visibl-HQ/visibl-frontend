@@ -15,7 +15,7 @@ export function ModeToggle() {
         aria-label="Theme loading"
         variant="ghost"
         size="icon-sm"
-        disabled
+        disabled={true}
       >
         <Monitor className="size-4" />
       </Button>

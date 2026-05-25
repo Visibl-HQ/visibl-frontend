@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google"
 import { SmoothScrollProvider } from "@/components/providers/smooth-scroll-provider"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
+import { AuthProvider } from "@/features/auth/components/auth-provider"
 import { constructMetadata } from "@/lib/metadata"
 import "./globals.css"
 import "lenis/dist/lenis.css"
@@ -43,7 +44,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SmoothScrollProvider>{children}</SmoothScrollProvider>
+          <AuthProvider>
+            <SmoothScrollProvider>{children}</SmoothScrollProvider>
+          </AuthProvider>
           <Toaster richColors closeButton />
         </ThemeProvider>
       </body>

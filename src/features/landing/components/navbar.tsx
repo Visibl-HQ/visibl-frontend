@@ -43,10 +43,10 @@ export function Navbar() {
             size="sm"
             className="hidden sm:inline-flex"
           >
-            <Link href="#pricing">Sign in</Link>
+            <Link href="/login">Sign in</Link>
           </Button>
           <Button asChild size="sm">
-            <Link href="#cta">
+            <Link href="/login">
               Get started
               <ArrowRight className="size-3.5" />
             </Link>
