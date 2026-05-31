@@ -15,11 +15,8 @@ import { cn } from "@/lib/utils"
 import { NewProjectDialog } from "@/features/projects/components/new-project-dialog"
 import { ProjectCard } from "@/features/projects/components/project-card"
 import { UserMenu } from "@/features/projects/components/user-menu"
-import {
-  createConversation,
-  createProject,
-  listProjects,
-} from "@/lib/api/projects"
+import { createProject, listProjects } from "@/lib/api/projects"
+import { draftConversationPath } from "@/features/workspace/lib/conversation-routing"
 import type { ProjectSummaryRead } from "@/lib/api/types"
 
 export function ProjectsDashboard() {
@@ -51,7 +48,7 @@ export function ProjectsDashboard() {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Could not load projects.",
+              : "Could not load projects."
           )
         }
       } finally {
@@ -70,8 +67,7 @@ export function ProjectsDashboard() {
 
   async function handleCreateProject(name: string) {
     const project = await createProject({ name })
-    const conversation = await createConversation(project.id)
-    router.push(`/projects/${project.id}/conversations/${conversation.id}`)
+    router.push(draftConversationPath(project.id))
   }
 
   async function handleLoadMore() {
@@ -89,7 +85,7 @@ export function ProjectsDashboard() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load more projects.",
+          : "Could not load more projects."
       )
     } finally {
       setIsLoadingMore(false)
@@ -98,22 +94,16 @@ export function ProjectsDashboard() {
 
   return (
     <AppShell>
-      <AppHeader
-        index="01"
-        label="Projects"
-        actions={<UserMenu />}
-      />
+      <AppHeader index="01" label="Projects" actions={<UserMenu />} />
 
       <Container className="py-8 sm:py-10">
         <div className="mb-8 flex flex-col gap-4 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
             <SectionLabel index="01">Dashboard</SectionLabel>
-            <h1 className={cn(typography.h2, "mt-2")}>
-              Your projects
-            </h1>
+            <h1 className={cn(typography.h2, "mt-2")}>Your projects</h1>
             <p className="text-muted-foreground mt-3 text-sm leading-7">
-              Open a project workspace to chat, capture memory pins, and build your
-              problem and customer doc.
+              Open a project workspace to chat, capture memory pins, and build
+              your problem and customer doc.
             </p>
           </div>
           <NewProjectDialog onCreate={handleCreateProject} />
@@ -162,7 +152,10 @@ export function ProjectsDashboard() {
                 >
                   {isLoadingMore ? (
                     <>
-                      <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
                       Loading…
                     </>
                   ) : (

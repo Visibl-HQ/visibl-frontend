@@ -1,9 +1,11 @@
-# Drop generated images here
+# Brand assets
 
-After running prompts from `references/assets/prompts/README.md`, place files as:
+Paths are defined in `src/config/assets.ts`. Drop final files here:
 
+- `brand/logo.svg`
+- `brand/logo-dark.svg`
 - `brand/assistant-mark.png`
 - `marketing/chat-empty-state.png`
 - `marketing/hero-grid-texture.png`
 
-These paths are referenced by `src/config/assets.ts`.
+The app falls back gracefully when optional images are missing.

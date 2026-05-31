@@ -1,6 +1,4 @@
 import type { Metadata } from "next"
-import { AuthGuard } from "@/features/auth/components/auth-guard"
-import { WorkspaceView } from "@/features/workspace/components/workspace-view"
 
 type PageProps = {
   params: Promise<{ projectId: string; conversationId: string }>
@@ -15,12 +13,7 @@ export async function generateMetadata({
   }
 }
 
-export default async function Page({ params }: PageProps) {
-  const { projectId, conversationId } = await params
-
-  return (
-    <AuthGuard>
-      <WorkspaceView projectId={projectId} conversationId={conversationId} />
-    </AuthGuard>
-  )
+/** Conversation UI is rendered by the parent conversations layout shell. */
+export default function Page() {
+  return null
 }

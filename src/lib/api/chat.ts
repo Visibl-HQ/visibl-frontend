@@ -9,6 +9,10 @@ export type ChatStreamHandlers = {
   onError: (error: Error) => void
 }
 
+function normalizeSseBuffer(value: string): string {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+}
+
 function parseSseEvent(part: string): { event: string; data: string } | null {
   if (!part.trim()) {
     return null
@@ -17,13 +21,16 @@ function parseSseEvent(part: string): { event: string; data: string } | null {
   let event = "message"
   let data = ""
 
-  for (const line of part.split("\n")) {
+  for (const rawLine of part.split("\n")) {
+    const line = rawLine.trimEnd()
+
     if (line.startsWith("event: ")) {
-      event = line.slice(7)
+      event = line.slice(7).trim()
     }
 
     if (line.startsWith("data: ")) {
-      data = line.slice(6)
+      const nextLine = line.slice(6)
+      data = data ? `${data}\n${nextLine}` : nextLine
     }
   }
 
@@ -32,6 +39,65 @@ function parseSseEvent(part: string): { event: string; data: string } | null {
   }
 
   return { event, data }
+}
+
+function dispatchSseEvent(
+  parsedEvent: { event: string; data: string },
+  handlers: ChatStreamHandlers
+): void {
+  const payload = JSON.parse(parsedEvent.data) as Record<string, unknown>
+
+  if (parsedEvent.event === "text_delta") {
+    handlers.onTextDelta(String(payload.content ?? ""))
+  }
+
+  if (parsedEvent.event === "tool_call" && handlers.onToolCall) {
+    handlers.onToolCall(
+      String(payload.tool ?? ""),
+      (payload.args as Record<string, unknown>) ?? {}
+    )
+  }
+
+  if (parsedEvent.event === "tool_result" && handlers.onToolResult) {
+    handlers.onToolResult(String(payload.tool ?? ""), payload.result)
+  }
+
+  if (parsedEvent.event === "done") {
+    handlers.onDone(payload as unknown as ChatDonePayload)
+  }
+}
+
+function consumeSseBuffer(
+  buffer: string,
+  handlers: ChatStreamHandlers,
+  flush = false
+): string {
+  const normalized = normalizeSseBuffer(buffer)
+  const parts = normalized.split("\n\n")
+
+  if (!flush) {
+    const remainder = parts.pop() ?? ""
+
+    for (const part of parts) {
+      const parsedEvent = parseSseEvent(part)
+
+      if (parsedEvent) {
+        dispatchSseEvent(parsedEvent, handlers)
+      }
+    }
+
+    return remainder
+  }
+
+  for (const part of parts) {
+    const parsedEvent = parseSseEvent(part)
+
+    if (parsedEvent) {
+      dispatchSseEvent(parsedEvent, handlers)
+    }
+  }
+
+  return ""
 }
 
 export async function sendChatMessage(
@@ -75,41 +141,13 @@ export async function sendChatMessage(
       const { done, value } = await reader.read()
 
       if (done) {
+        buffer += decoder.decode()
+        consumeSseBuffer(buffer, handlers, true)
         break
       }
 
       buffer += decoder.decode(value, { stream: true })
-      const parts = buffer.split("\n\n")
-      buffer = parts.pop() ?? ""
-
-      for (const part of parts) {
-        const parsedEvent = parseSseEvent(part)
-
-        if (!parsedEvent) {
-          continue
-        }
-
-        const payload = JSON.parse(parsedEvent.data) as Record<string, unknown>
-
-        if (parsedEvent.event === "text_delta") {
-          handlers.onTextDelta(String(payload.content ?? ""))
-        }
-
-        if (parsedEvent.event === "tool_call" && handlers.onToolCall) {
-          handlers.onToolCall(
-            String(payload.tool ?? ""),
-            (payload.args as Record<string, unknown>) ?? {}
-          )
-        }
-
-        if (parsedEvent.event === "tool_result" && handlers.onToolResult) {
-          handlers.onToolResult(String(payload.tool ?? ""), payload.result)
-        }
-
-        if (parsedEvent.event === "done") {
-          handlers.onDone(payload as unknown as ChatDonePayload)
-        }
-      }
+      buffer = consumeSseBuffer(buffer, handlers)
     }
   } catch (error) {
     if (signal?.aborted) {

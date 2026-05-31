@@ -10,22 +10,22 @@ OpenAPI (live): `{API_BASE_URL}/api/v1/openapi.json`
 
 ## Health
 
-| Method | Path | Auth | Notes |
-|--------|------|------|-------|
-| GET | `/` | No | `{ "message": "Welcome to the visibl API" }` |
-| GET | `/db_check` | No | Dev health |
+| Method | Path        | Auth | Notes                                        |
+| ------ | ----------- | ---- | -------------------------------------------- |
+| GET    | `/`         | No   | `{ "message": "Welcome to the visibl API" }` |
+| GET    | `/db_check` | No   | Dev health                                   |
 
 ---
 
 ## Auth (`/auth`)
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/auth/google/login` | No | 302 → Google OAuth |
-| GET | `/auth/google/callback` | No | Google → sets cookies → 302 frontend |
-| GET | `/auth/me` | Yes | Current user profile |
-| POST | `/auth/refresh` | Refresh cookie | Rotate session |
-| POST | `/auth/logout` | Optional | Revoke + clear cookies |
+| Method | Path                    | Auth           | Description                          |
+| ------ | ----------------------- | -------------- | ------------------------------------ |
+| GET    | `/auth/google/login`    | No             | 302 → Google OAuth                   |
+| GET    | `/auth/google/callback` | No             | Google → sets cookies → 302 frontend |
+| GET    | `/auth/me`              | Yes            | Current user profile                 |
+| POST   | `/auth/refresh`         | Refresh cookie | Rotate session                       |
+| POST   | `/auth/logout`          | Optional       | Revoke + clear cookies               |
 
 See [01-auth-and-session.md](./01-auth-and-session.md).
 
@@ -172,8 +172,12 @@ Response `WorkspaceRead`:
 
 ```json
 {
-  "project": { /* ProjectRead */ },
-  "conversation": { /* ConversationRead */ },
+  "project": {
+    /* ProjectRead */
+  },
+  "conversation": {
+    /* ConversationRead */
+  },
   "messages": [
     {
       "id": "uuid",
@@ -192,8 +196,12 @@ Response `WorkspaceRead`:
       "created_at": "..."
     }
   ],
-  "memory_pins": [ /* MemoryPinRead[] — this conversation only */ ],
-  "problem_customer_doc": { /* ProblemCustomerDocRead */ },
+  "memory_pins": [
+    /* MemoryPinRead[] — this conversation only */
+  ],
+  "problem_customer_doc": {
+    /* ProblemCustomerDocRead */
+  },
   "user_display_name": "founder_username"
 }
 ```
@@ -242,10 +250,10 @@ There is **no** GET messages-only endpoint in v1 — use workspace.
 
 `pin_type`:
 
-| Type | `payload` |
-|------|-----------|
+| Type     | `payload`                              |
+| -------- | -------------------------------------- |
 | `metric` | `{ "value": string, "label": string }` |
-| `note` | `{ "content": string }` |
+| `note`   | `{ "content": string }`                |
 
 Pins are created by the **assistant** via tools during chat — no `POST /pins` in v1.
 
@@ -291,7 +299,7 @@ Section keys (enum):
 ## Pagination helper
 
 ```typescript
-type CursorPage<T> = { items: T[]; next_cursor: string | null };
+type CursorPage<T> = { items: T[]; next_cursor: string | null }
 ```
 
 Loop while `next_cursor` is non-null.
@@ -315,21 +323,21 @@ Validation errors may return `detail` as an array of field errors.
 Backend allows configured origins with credentials. Frontend must:
 
 ```javascript
-fetch(url, { credentials: 'include' })
+fetch(url, { credentials: "include" })
 ```
 
 ---
 
 ## Not available in v1 (do not build against)
 
-| Feature | Status |
-|---------|--------|
-| PATCH project | Not implemented |
-| DELETE project / conversation | Not implemented |
-| POST pin / PATCH checklist | Tools only (assistant) |
-| List messages (standalone) | Use workspace |
-| Upload files | Not implemented |
-| Git graph / commits | Placeholder UI |
-| Other doc types (GTM, TAM, deck) | Future |
-| Hosted public pages | Future |
-| WebSocket chat | SSE only |
+| Feature                          | Status                 |
+| -------------------------------- | ---------------------- |
+| PATCH project                    | Not implemented        |
+| DELETE project / conversation    | Not implemented        |
+| POST pin / PATCH checklist       | Tools only (assistant) |
+| List messages (standalone)       | Use workspace          |
+| Upload files                     | Not implemented        |
+| Git graph / commits              | Placeholder UI         |
+| Other doc types (GTM, TAM, deck) | Future                 |
+| Hosted public pages              | Future                 |
+| WebSocket chat                   | SSE only               |

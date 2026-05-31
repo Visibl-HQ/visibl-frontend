@@ -4,10 +4,10 @@ Backend-owned auth. **Not** Supabase Auth. Session is **httpOnly cookies** set b
 
 ## Cookies
 
-| Cookie | Purpose | Typical max-age |
-|--------|---------|-----------------|
-| `access_token` | JWT access token | 60 minutes |
-| `refresh_token` | Opaque refresh token (hashed server-side) | 7 days |
+| Cookie          | Purpose                                   | Typical max-age |
+| --------------- | ----------------------------------------- | --------------- |
+| `access_token`  | JWT access token                          | 60 minutes      |
+| `refresh_token` | Opaque refresh token (hashed server-side) | 7 days          |
 
 Both: `path=/`, `SameSite=Lax`, `HttpOnly`, `Secure` only in production.
 
@@ -111,36 +111,36 @@ Clears cookies server-side. Redirect to marketing/login page.
 
 ```typescript
 async function apiFetch(path: string, init?: RequestInit) {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL!;
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL!
   let res = await fetch(`${base}/api/v1${path}`, {
     ...init,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-  });
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...init?.headers },
+  })
   if (res.status === 401) {
     const refreshed = await fetch(`${base}/api/v1/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
+      method: "POST",
+      credentials: "include",
+    })
     if (refreshed.ok) {
       res = await fetch(`${base}/api/v1${path}`, {
         ...init,
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...init?.headers },
-      });
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...init?.headers },
+      })
     }
   }
-  return res;
+  return res
 }
 ```
 
 ## Errors
 
-| Status | Meaning |
-|--------|---------|
-| 401 | Not logged in or token expired |
-| 403 | Logged in but wrong role (rare on v1 founder routes) |
-| 404 | Resource not found or **not owned** by user (projects) |
+| Status | Meaning                                                |
+| ------ | ------------------------------------------------------ |
+| 401    | Not logged in or token expired                         |
+| 403    | Logged in but wrong role (rare on v1 founder routes)   |
+| 404    | Resource not found or **not owned** by user (projects) |
 
 Do not leak whether a project ID exists for other users — treat 404 as "not found".
 

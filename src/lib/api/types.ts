@@ -140,3 +140,140 @@ export type ChatDonePayload = {
 export type ApiErrorBody = {
   detail: string | Array<{ loc: string[]; msg: string; type: string }>
 }
+
+export type BranchStatus = "active" | "merged" | "abandoned"
+
+export type BranchRead = {
+  id: string
+  name: string
+  created_at: string
+  forked_from_checkpoint_id: string | null
+  parent_branch_id: string
+  head_checkpoint_id: string | null
+  status: BranchStatus
+}
+
+export type CheckpointRead = {
+  id: string
+  branch_id: string
+  conversation_id: string
+  title: string
+  note: string | null
+  created_at: string
+  pins_snapshot: MemoryPinRead[]
+  doc_snapshot: ProblemCustomerDocRead
+  message_count: number
+  parent_checkpoint_id: string | null
+}
+
+export type ConversationBindingRead = {
+  conversation_id: string
+  branch_id: string
+  base_checkpoint_id: string | null
+  last_checkpoint_id: string | null
+}
+
+export type PotentialImpactRead = {
+  field: string
+  description: string
+  severity: "medium" | "high"
+}
+
+export type OneOffMessageRead = {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  created_at: string
+}
+
+export type OneOffSessionRead = {
+  id: string
+  question: string
+  messages: OneOffMessageRead[]
+  potential_impacts: PotentialImpactRead[]
+  fork_checkpoint_id: string | null
+  conversation_id: string
+  created_at: string
+}
+
+export type IdeaHistoryBootstrapRead = {
+  version: 1
+  main_branch_id: string
+  branches: BranchRead[]
+  checkpoints: CheckpointRead[]
+  conversation_bindings: ConversationBindingRead[]
+  one_off_sessions: OneOffSessionRead[]
+}
+
+export type DirtyChangeRead = {
+  kind: "pin" | "doc" | "message"
+  label: string
+  detail?: string
+}
+
+export type ConversationHistoryStatusRead = {
+  is_dirty: boolean
+  dirty_changes: DirtyChangeRead[]
+  can_branch: boolean
+  can_merge: boolean
+  active_branch: BranchRead
+  head_checkpoint: CheckpointRead | null
+}
+
+export type BindingRestoreRead = {
+  memory_pins: MemoryPinRead[]
+  problem_customer_doc: ProblemCustomerDocRead
+}
+
+export type BindingUpdateResponse = {
+  binding: ConversationBindingRead
+  checkpoint: CheckpointRead | null
+  restore: BindingRestoreRead
+}
+
+export type MergeBranchResponse = {
+  merge_checkpoint: CheckpointRead
+  main_branch: BranchRead
+  merged_branch: BranchRead
+  binding: ConversationBindingRead
+  restore: BindingRestoreRead
+}
+
+export type CreateCheckpointBody = {
+  branch_id: string
+  conversation_id: string
+  title: string
+  note?: string
+  message_count?: number
+}
+
+export type CreateBranchBody = {
+  name: string
+  from_checkpoint_id: string
+  conversation_id: string
+}
+
+export type CreateBranchResponse = {
+  branch: BranchRead
+  binding: ConversationBindingRead
+  restore: BindingRestoreRead
+}
+
+export type UpdateBindingBody = {
+  branch_id: string
+  checkpoint_id?: string | null
+}
+
+export type CreateOneOffBody = {
+  question: string
+  fork_checkpoint_id: string | null
+  conversation_id: string
+}
+
+export type SendOneOffMessageBody = {
+  content: string
+}
+
+export type MergeBranchBody = {
+  conversation_id: string
+}

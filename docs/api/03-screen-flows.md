@@ -68,12 +68,12 @@ POST /api/v1/auth/logout
 
 ### Layout (from product)
 
-| Column | v1 behavior |
-|--------|-------------|
-| Left | Project name, account label, **git graph placeholder** (empty state copy only) |
-| Center | Chat thread + composer |
-| Right top | Memory pins (this conversation) |
-| Right bottom | **Problem & customer** doc card + `%` bar |
+| Column       | v1 behavior                                                                    |
+| ------------ | ------------------------------------------------------------------------------ |
+| Left         | Project name, account label, **git graph placeholder** (empty state copy only) |
+| Center       | Chat thread + composer                                                         |
+| Right top    | Memory pins (this conversation)                                                |
+| Right bottom | **Problem & customer** doc card + `%` bar                                      |
 
 ### On enter
 
@@ -140,13 +140,13 @@ Protected layouts (`/projects`, `/projects/...`):
 
 ```typescript
 type WorkspaceState = {
-  project: ProjectRead;
-  conversation: ConversationRead;
-  messages: MessageRead[];
-  memoryPins: MemoryPinRead[];
-  problemCustomerDoc: ProblemCustomerDocRead;
-  userDisplayName: string;
-};
+  project: ProjectRead
+  conversation: ConversationRead
+  messages: MessageRead[]
+  memoryPins: MemoryPinRead[]
+  problemCustomerDoc: ProblemCustomerDocRead
+  userDisplayName: string
+}
 ```
 
 Update from:
@@ -158,9 +158,9 @@ Update from:
 
 ## URL state recommendations
 
-| Param | Purpose |
-|-------|---------|
-| `projectId` | Current project |
+| Param            | Purpose              |
+| ---------------- | -------------------- |
+| `projectId`      | Current project      |
 | `conversationId` | Current conversation |
 
 Deep-link: `/projects/{id}/conversations/{id}` after OAuth callback if you store `returnTo` in sessionStorage before Google redirect.
@@ -169,10 +169,10 @@ Deep-link: `/projects/{id}/conversations/{id}` after OAuth callback if you store
 
 ## Empty states
 
-| Surface | Copy direction |
-|---------|----------------|
-| No projects | CTA create first project |
-| No conversations | Auto-create on first enter or CTA |
-| No pins | “Key facts will appear as you talk” |
-| Doc 0% | “Problem & customer — unlocks as you share detail” |
-| Git rail | “Version history coming soon” |
+| Surface          | Copy direction                                     |
+| ---------------- | -------------------------------------------------- |
+| No projects      | CTA create first project                           |
+| No conversations | Auto-create on first enter or CTA                  |
+| No pins          | “Key facts will appear as you talk”                |
+| Doc 0%           | “Problem & customer — unlocks as you share detail” |
+| Git rail         | “Version history coming soon”                      |

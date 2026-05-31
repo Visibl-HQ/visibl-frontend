@@ -13,7 +13,7 @@ type ProjectCardProps = {
 export function ProjectCard({ project, href }: ProjectCardProps) {
   return (
     <Link href={href} className="group block h-full focus-visible:outline-none">
-      <article className="border-border/70 bg-card/80 hover:border-border flex h-full flex-col rounded-lg border p-5 transition-colors focus-within:ring-2 focus-within:ring-ring">
+      <article className="border-border/70 bg-card/80 hover:border-border focus-within:ring-ring flex h-full flex-col rounded-lg border p-5 transition-colors focus-within:ring-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <SectionLabel>Project</SectionLabel>

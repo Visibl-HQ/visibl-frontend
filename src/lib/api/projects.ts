@@ -72,6 +72,16 @@ export async function createConversation(
   })
 }
 
+export async function deleteConversation(
+  projectId: string,
+  conversationId: string
+): Promise<void> {
+  await apiJson<void>(
+    `/projects/${projectId}/conversations/${conversationId}`,
+    { method: "DELETE" }
+  )
+}
+
 export async function getWorkspace(
   projectId: string,
   conversationId: string

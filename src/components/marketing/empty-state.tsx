@@ -26,7 +26,9 @@ export function EmptyState({
       <span className="border-border/70 bg-background grid size-11 place-items-center rounded-md border">
         <Icon className="text-muted-foreground size-5" aria-hidden="true" />
       </span>
-      <h2 className="mt-5 font-serif text-xl font-semibold tracking-tight">{title}</h2>
+      <h2 className="mt-5 font-serif text-xl font-semibold tracking-tight">
+        {title}
+      </h2>
       <p className="text-muted-foreground mt-2 max-w-md text-sm leading-7">
         {description}
       </p>

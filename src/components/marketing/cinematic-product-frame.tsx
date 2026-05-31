@@ -46,39 +46,59 @@ type SceneId = (typeof scenes)[number]["id"]
 
 export function CinematicProductFrame({ className }: { className?: string }) {
   const [index, setIndex] = React.useState(0)
+  const [isVisible, setIsVisible] = React.useState(true)
   const reduceMotion = useReducedMotion()
+  const rootRef = React.useRef<HTMLDivElement>(null)
   const scene = scenes[index] ?? scenes[0]
 
   React.useEffect(() => {
-    if (reduceMotion) return
+    const node = rootRef.current
+    if (!node) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry?.isIntersecting ?? false)
+      },
+      { threshold: 0.2 }
+    )
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  React.useEffect(() => {
+    if (reduceMotion || !isVisible) return
     const timer = window.setInterval(() => {
       setIndex((value) => (value + 1) % scenes.length)
     }, 3400)
     return () => window.clearInterval(timer)
-  }, [reduceMotion])
+  }, [reduceMotion, isVisible])
 
   return (
-    <div className={cn("relative mx-auto w-full max-w-5xl", className)}>
-      <div className="absolute inset-x-12 -top-10 h-28 rounded-full bg-cyan-100/55 blur-3xl dark:bg-cyan-400/10" />
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/75 bg-white/52 p-1.5 shadow-[0_42px_120px_rgba(31,43,71,0.18)] backdrop-blur-2xl [clip-path:inset(0_round_1.75rem)] dark:border-white/10 dark:bg-white/7">
+    <div
+      ref={rootRef}
+      className={cn("relative mx-auto w-full max-w-5xl", className)}
+    >
+      <div className="absolute inset-x-4 -top-10 h-28 rounded-full bg-cyan-100/55 blur-3xl sm:inset-x-12 dark:bg-cyan-400/10" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/75 bg-white/52 p-1.5 shadow-[0_42px_120px_rgba(31,43,71,0.18)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/7">
         <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(115deg,transparent_0%,rgba(255,255,255,0.52)_42%,transparent_58%)] opacity-55" />
-        <div className="relative overflow-hidden rounded-[1.38rem] border border-slate-950/8 bg-[#fbfaf4] [clip-path:inset(0_round_1.38rem)] dark:border-white/8 dark:bg-[#080a10]">
-          <div className="flex h-11 items-center justify-between border-b border-slate-950/8 bg-white/42 px-4 backdrop-blur-xl dark:border-white/8 dark:bg-white/[0.035]">
-            <div className="flex items-center gap-2">
+        <div className="relative overflow-hidden rounded-[1.38rem] border border-slate-950/8 bg-[#fbfaf4] dark:border-white/8 dark:bg-[#080a10]">
+          <div className="flex h-11 items-center justify-between gap-2 border-b border-slate-950/8 bg-white/42 px-3 backdrop-blur-xl sm:px-4 dark:border-white/8 dark:bg-white/[0.035]">
+            <div className="flex shrink-0 items-center gap-2">
               <span className="size-2.5 rounded-full bg-rose-400" />
               <span className="size-2.5 rounded-full bg-amber-300" />
               <span className="size-2.5 rounded-full bg-emerald-400" />
             </div>
-            <div className="rounded-full border border-slate-950/8 bg-white/76 px-3 py-1 text-xs text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/8 dark:text-slate-300">
+            <div className="min-w-0 truncate rounded-full border border-slate-950/8 bg-white/76 px-2.5 py-1 text-[11px] text-slate-500 shadow-sm sm:px-3 sm:text-xs dark:border-white/10 dark:bg-white/8 dark:text-slate-300">
               Visibl workspace
             </div>
-            <div className="text-xs font-medium text-slate-400 dark:text-slate-500">
+            <div className="hidden shrink-0 text-xs font-medium text-slate-400 sm:block dark:text-slate-500">
               Live loop
             </div>
           </div>
 
           <div className="grid gap-0 lg:grid-cols-[0.82fr_1.18fr]">
-            <aside className="border-b border-slate-950/8 bg-[#fbfaf4] p-6 sm:p-8 lg:border-r lg:border-b-0 dark:border-white/8 dark:bg-[#080a10]">
+            <aside className="border-b border-slate-950/8 bg-[#fbfaf4] p-4 sm:p-6 lg:border-r lg:border-b-0 lg:p-8 dark:border-white/8 dark:bg-[#080a10]">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={scene.id}
@@ -90,7 +110,7 @@ export function CinematicProductFrame({ className }: { className?: string }) {
                   <p className="text-xs font-semibold tracking-[0.2em] text-cyan-600 uppercase dark:text-cyan-300">
                     {scene.label}
                   </p>
-                  <h3 className="mt-5 max-w-sm text-[clamp(2.05rem,3.1vw,3.45rem)] leading-[1.02] font-semibold tracking-tight text-slate-950 dark:text-white">
+                  <h3 className="mt-5 max-w-sm text-2xl leading-tight font-semibold tracking-tight text-slate-950 sm:text-3xl lg:text-4xl dark:text-white">
                     {scene.title}
                   </h3>
                   <p className="mt-5 max-w-xs text-base leading-7 text-slate-600 dark:text-slate-300">
@@ -126,7 +146,7 @@ export function CinematicProductFrame({ className }: { className?: string }) {
               </div>
             </aside>
 
-            <div className="relative min-h-[560px] overflow-hidden bg-[radial-gradient(circle_at_82%_10%,rgba(103,232,249,0.22),transparent_28%),radial-gradient(circle_at_12%_86%,rgba(217,226,255,0.32),transparent_36%),linear-gradient(135deg,#fffdf8,#eef7f4)] p-6 dark:bg-[radial-gradient(circle_at_82%_10%,rgba(103,232,249,0.13),transparent_28%),radial-gradient(circle_at_10%_90%,rgba(96,165,250,0.11),transparent_32%),linear-gradient(135deg,#0b0d14,#10131d)]">
+            <div className="relative min-h-[420px] overflow-hidden bg-[radial-gradient(circle_at_82%_10%,rgba(103,232,249,0.22),transparent_28%),radial-gradient(circle_at_12%_86%,rgba(217,226,255,0.32),transparent_36%),linear-gradient(135deg,#fffdf8,#eef7f4)] p-4 sm:min-h-[480px] sm:p-6 lg:min-h-[560px] dark:bg-[radial-gradient(circle_at_82%_10%,rgba(103,232,249,0.13),transparent_28%),radial-gradient(circle_at_10%_90%,rgba(96,165,250,0.11),transparent_32%),linear-gradient(135deg,#0b0d14,#10131d)]">
               <motion.div
                 aria-hidden="true"
                 {...(!reduceMotion
@@ -188,7 +208,7 @@ function Surface({
   return (
     <div
       className={cn(
-        "mx-auto flex min-h-[500px] max-w-xl flex-col overflow-hidden rounded-[1.35rem] border border-slate-950/8 bg-[#fffef9]/92 p-5 shadow-[0_28px_90px_rgba(25,34,58,0.12)] backdrop-blur-xl [clip-path:inset(0_round_1.35rem)] dark:border-cyan-300/16 dark:bg-[#101722]/92 dark:shadow-[0_28px_90px_rgba(0,0,0,0.38)]",
+        "mx-auto flex min-h-[380px] max-w-xl flex-col overflow-hidden rounded-[1.35rem] border border-slate-950/8 bg-[#fffef9]/92 p-4 shadow-[0_28px_90px_rgba(25,34,58,0.12)] backdrop-blur-xl sm:min-h-[440px] sm:p-5 dark:border-cyan-300/16 dark:bg-[#101722]/92 dark:shadow-[0_28px_90px_rgba(0,0,0,0.38)]",
         className
       )}
     >
@@ -198,6 +218,8 @@ function Surface({
 }
 
 function ChatScene() {
+  const reduceMotion = useReducedMotion()
+
   return (
     <Surface>
       <Header icon={MessageSquareText} label="Conversation" />
@@ -214,8 +236,16 @@ function ChatScene() {
         {[0, 1, 2].map((dot) => (
           <motion.span
             key={dot}
-            animate={{ y: [0, -4, 0] }}
-            transition={{ duration: 0.8, repeat: Infinity, delay: dot * 0.12 }}
+            {...(!reduceMotion
+              ? {
+                  animate: { y: [0, -4, 0] },
+                  transition: {
+                    duration: 0.8,
+                    repeat: Infinity,
+                    delay: dot * 0.12,
+                  },
+                }
+              : {})}
             className="size-2 rounded-full bg-cyan-400"
           />
         ))}
@@ -225,6 +255,8 @@ function ChatScene() {
 }
 
 function PinsScene() {
+  const reduceMotion = useReducedMotion()
+
   return (
     <Surface>
       <Header icon={Pin} label="Memory pins" />
@@ -237,9 +269,9 @@ function PinsScene() {
         ].map(([label, text], index) => (
           <motion.div
             key={label}
-            initial={{ opacity: 0, x: -12 }}
+            initial={reduceMotion ? false : { opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.09 }}
+            transition={{ delay: reduceMotion ? 0 : index * 0.09 }}
             className="rounded-2xl border border-slate-950/8 bg-[#fbfaf4] p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.055]"
           >
             <div className="flex items-center justify-between">
@@ -290,7 +322,7 @@ function ShareScene() {
         <p className="text-xs tracking-[0.18em] text-cyan-600 uppercase dark:text-cyan-300">
           Published
         </p>
-        <h4 className="mt-4 text-4xl leading-none font-semibold tracking-tight text-slate-950 dark:text-white">
+        <h4 className="mt-4 text-2xl leading-tight font-semibold tracking-tight text-slate-950 sm:text-3xl dark:text-white">
           One link. Controlled truth.
         </h4>
         <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">

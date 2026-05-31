@@ -3,11 +3,10 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { AppLogoBar } from "@/components/layout/app-logo-bar"
 import { AppPanel } from "@/components/marketing/app-panel"
 import { AppShell } from "@/components/layout/app-shell"
-import { Container } from "@/components/layout/container"
 import { SkipLink } from "@/components/layout/skip-link"
-import { VisiblLogo } from "@/components/layout/visibl-logo"
 import { SectionLabel } from "@/components/marketing/section-label"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,14 +28,14 @@ export function LoginPage() {
   return (
     <AppShell>
       <SkipLink href="#login-main" />
-      <header className="border-border/70 border-b">
-        <Container className="flex h-14 items-center justify-between">
-          <VisiblLogo href="/" />
+      <AppLogoBar
+        href="/"
+        actions={
           <Button asChild variant="outline" size="sm" className="rounded-md">
             <Link href="/">Back to home</Link>
           </Button>
-        </Container>
-      </header>
+        }
+      />
 
       <main
         id="login-main"
@@ -57,7 +56,8 @@ export function LoginPage() {
                 Welcome back
               </h1>
               <p className="text-muted-foreground mt-3 text-sm leading-7">
-                Continue with Google to open your projects, conversations, and workspace.
+                Continue with Google to open your projects, conversations, and
+                workspace.
               </p>
               <div className="mt-8">
                 <GoogleSignInButton

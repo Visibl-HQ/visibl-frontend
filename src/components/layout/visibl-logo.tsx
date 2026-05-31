@@ -1,42 +1,28 @@
-import Link from "next/link"
-import { Compass } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { siteConfig } from "@/config/site"
+import { AppLogoMark } from "@/components/layout/app-logo-mark"
 
 type VisiblLogoProps = {
   href?: string
   className?: string
   inverted?: boolean
+  showWordmark?: boolean
+  size?: "sm" | "md" | "lg"
 }
 
+/** Marketing-facing logo — delegates to swappable AppLogoMark. */
 export function VisiblLogo({
   href = "/",
   className,
   inverted = false,
+  showWordmark = true,
+  size = "md",
 }: VisiblLogoProps) {
-  const mark = (
-    <>
-      <span
-        className={cn(
-          "grid size-9 place-items-center rounded-md border",
-          inverted
-            ? "border-white/12 bg-white text-[#090b10]"
-            : "border-border/70 bg-foreground text-background",
-        )}
-      >
-        <Compass className="size-4" aria-hidden="true" />
-      </span>
-      <span className="font-semibold tracking-tight">{siteConfig.name}</span>
-    </>
+  return (
+    <AppLogoMark
+      href={href}
+      showWordmark={showWordmark}
+      size={size}
+      inverted={inverted}
+      {...(className ? { className } : {})}
+    />
   )
-
-  if (href) {
-    return (
-      <Link href={href} className={cn("inline-flex items-center gap-3", className)}>
-        {mark}
-      </Link>
-    )
-  }
-
-  return <div className={cn("inline-flex items-center gap-3", className)}>{mark}</div>
 }

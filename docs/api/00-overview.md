@@ -26,11 +26,11 @@ A founder can:
 
 ## Environment (local)
 
-| Variable | Typical value |
-|----------|----------------|
-| Frontend | `http://localhost:3000` (or `5173`) |
-| API | `http://localhost:8000` |
-| API prefix | `/api/v1` |
+| Variable   | Typical value                       |
+| ---------- | ----------------------------------- |
+| Frontend   | `http://localhost:3000` (or `5173`) |
+| API        | `http://localhost:8000`             |
+| API prefix | `/api/v1`                           |
 
 Backend must be started from `backend/`:
 
@@ -43,13 +43,13 @@ Use **`localhost`** in browser and env — not `127.0.0.1` — so Google OAuth r
 
 ## Docs in this folder
 
-| File | Purpose |
-|------|---------|
+| File                                               | Purpose                                |
+| -------------------------------------------------- | -------------------------------------- |
 | [01-auth-and-session.md](./01-auth-and-session.md) | Google OAuth, cookies, session refresh |
-| [02-v1-api-reference.md](./02-v1-api-reference.md) | Every endpoint, schemas, errors |
-| [03-screen-flows.md](./03-screen-flows.md) | Which API to call per screen |
-| [04-chat-sse.md](./04-chat-sse.md) | Streaming chat protocol |
-| [AGENTS.md](./AGENTS.md) | Rules for frontend coding agents |
+| [02-v1-api-reference.md](./02-v1-api-reference.md) | Every endpoint, schemas, errors        |
+| [03-screen-flows.md](./03-screen-flows.md)         | Which API to call per screen           |
+| [04-chat-sse.md](./04-chat-sse.md)                 | Streaming chat protocol                |
+| [AGENTS.md](./AGENTS.md)                           | Rules for frontend coding agents       |
 
 ## Non-negotiables for frontend
 

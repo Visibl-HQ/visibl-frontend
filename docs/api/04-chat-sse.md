@@ -32,12 +32,12 @@ Blank line between events.
 
 ### Event types
 
-| Event | When | `data` shape |
-|-------|------|----------------|
-| `text_delta` | Assistant text streaming | `{ "content": "partial text" }` |
-| `tool_call` | Assistant invoked a tool | `{ "tool": "create_memory_pin", "args": { ... } }` |
-| `tool_result` | Tool finished | `{ "tool": "call_id or name", "result": "..." }` |
-| `done` | Stream complete, persisted | See below |
+| Event         | When                       | `data` shape                                       |
+| ------------- | -------------------------- | -------------------------------------------------- |
+| `text_delta`  | Assistant text streaming   | `{ "content": "partial text" }`                    |
+| `tool_call`   | Assistant invoked a tool   | `{ "tool": "create_memory_pin", "args": { ... } }` |
+| `tool_result` | Tool finished              | `{ "tool": "call_id or name", "result": "..." }`   |
+| `done`        | Stream complete, persisted | See below                                          |
 
 ### `done` payload
 
@@ -85,53 +85,53 @@ async function sendChatMessage(
   conversationId: string,
   content: string,
   handlers: {
-    onTextDelta: (chunk: string) => void;
-    onToolCall?: (tool: string, args: Record<string, unknown>) => void;
-    onDone: (payload: DonePayload) => void;
-    onError: (err: Error) => void;
-  },
+    onTextDelta: (chunk: string) => void
+    onToolCall?: (tool: string, args: Record<string, unknown>) => void
+    onDone: (payload: DonePayload) => void
+    onError: (err: Error) => void
+  }
 ) {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/projects/${projectId}/conversations/${conversationId}/messages`,
     {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
-    },
-  );
+    }
+  )
 
   if (!res.ok) {
-    handlers.onError(new Error(`Chat failed: ${res.status}`));
-    return;
+    handlers.onError(new Error(`Chat failed: ${res.status}`))
+    return
   }
 
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
 
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
 
-    const parts = buffer.split('\n\n');
-    buffer = parts.pop() ?? '';
+    const parts = buffer.split("\n\n")
+    buffer = parts.pop() ?? ""
 
     for (const part of parts) {
-      if (!part.trim()) continue;
-      let event = 'message';
-      let data = '';
-      for (const line of part.split('\n')) {
-        if (line.startsWith('event: ')) event = line.slice(7);
-        if (line.startsWith('data: ')) data = line.slice(6);
+      if (!part.trim()) continue
+      let event = "message"
+      let data = ""
+      for (const line of part.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7)
+        if (line.startsWith("data: ")) data = line.slice(6)
       }
-      if (!data) continue;
-      const parsed = JSON.parse(data);
-      if (event === 'text_delta') handlers.onTextDelta(parsed.content);
-      if (event === 'tool_call' && handlers.onToolCall)
-        handlers.onToolCall(parsed.tool, parsed.args);
-      if (event === 'done') handlers.onDone(parsed);
+      if (!data) continue
+      const parsed = JSON.parse(data)
+      if (event === "text_delta") handlers.onTextDelta(parsed.content)
+      if (event === "tool_call" && handlers.onToolCall)
+        handlers.onToolCall(parsed.tool, parsed.args)
+      if (event === "done") handlers.onDone(parsed)
     }
   }
 }
@@ -140,15 +140,15 @@ async function sendChatMessage(
 ## UX notes
 
 - Show typing indicator after POST until first `text_delta` or `done`
-- `tool_call` for `update_problem_customer_section` → optional subtle “Updating problem & customer…” 
+- `tool_call` for `update_problem_customer_section` → optional subtle “Updating problem & customer…”
 - `tool_call` for `create_memory_pin` → optional “Pinned a note”
 - On network error mid-stream: show retry; user message may already be persisted — refetch workspace on recovery
 - Empty content → `400` before stream starts
 
 ## Errors (non-SSE)
 
-| Status | Cause |
-|--------|--------|
-| 400 | Empty message |
-| 401 | Not authenticated |
-| 404 | Project/conversation not found or not owned |
+| Status | Cause                                       |
+| ------ | ------------------------------------------- |
+| 400    | Empty message                               |
+| 401    | Not authenticated                           |
+| 404    | Project/conversation not found or not owned |

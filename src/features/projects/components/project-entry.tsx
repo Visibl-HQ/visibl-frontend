@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
-import { createConversation, listConversations } from "@/lib/api/projects"
+import { listConversations } from "@/lib/api/projects"
+import {
+  conversationPath,
+  draftConversationPath,
+} from "@/features/workspace/lib/conversation-routing"
+import { sortConversationsByRecent } from "@/features/workspace/data/conversation-meta"
 
 type ProjectEntryProps = {
   projectId: string
@@ -18,18 +23,15 @@ export function ProjectEntry({ projectId }: ProjectEntryProps) {
 
     async function openProject() {
       try {
-        const page = await listConversations(projectId, { limit: 1 })
-        const existing = page.items[0]
+        const page = await listConversations(projectId, { limit: 20 })
+        const existing = sortConversationsByRecent(page.items)[0]
 
         if (existing) {
-          router.replace(`/projects/${projectId}/conversations/${existing.id}`)
+          router.replace(conversationPath(projectId, existing.id))
           return
         }
 
-        const conversation = await createConversation(projectId)
-        router.replace(
-          `/projects/${projectId}/conversations/${conversation.id}`
-        )
+        router.replace(draftConversationPath(projectId))
       } catch (entryError) {
         if (!cancelled) {
           setError(

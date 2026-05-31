@@ -1,7 +1,6 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { SectionLabel } from "@/components/marketing/section-label"
 import { ChatComposer } from "@/features/workspace/components/chat-composer"
 import {
   ChatThread,
@@ -14,6 +13,7 @@ type ChatPanelProps = {
   isStreaming: boolean
   error?: string | null
   onSend: (content: string) => Promise<void>
+  onExploreSeparately?: () => void
   className?: string
 }
 
@@ -23,25 +23,16 @@ export function ChatPanel({
   isStreaming,
   error,
   onSend,
+  onExploreSeparately,
   className,
 }: ChatPanelProps) {
   return (
     <section
       className={cn(
-        "chat-panel-bg border-border/70 relative flex min-h-0 min-w-0 flex-col border-x",
+        "chat-panel-bg relative flex min-h-0 min-w-0 flex-col",
         className
       )}
     >
-      <div className="border-border/60 bg-background/70 flex shrink-0 items-center justify-between border-b px-4 py-3 sm:px-6">
-        <div>
-          <SectionLabel index="01">Intake</SectionLabel>
-          <p className="text-muted-foreground text-xs">Streaming conversation</p>
-        </div>
-        <div className="text-muted-foreground font-mono text-[10px] tracking-[0.14em] uppercase">
-          {messages.length} message{messages.length === 1 ? "" : "s"}
-        </div>
-      </div>
-
       {error ? (
         <div
           role="alert"
@@ -55,7 +46,11 @@ export function ChatPanel({
         messages={messages}
         {...(activityLabel !== undefined ? { activityLabel } : {})}
       />
-      <ChatComposer disabled={isStreaming} onSend={onSend} />
+      <ChatComposer
+        disabled={isStreaming}
+        onSend={onSend}
+        {...(onExploreSeparately ? { onExploreSeparately } : {})}
+      />
     </section>
   )
 }

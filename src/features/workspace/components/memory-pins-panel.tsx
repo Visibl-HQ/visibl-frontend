@@ -1,6 +1,4 @@
 import { Pin, StickyNote } from "lucide-react"
-import { AppPanel } from "@/components/marketing/app-panel"
-import { SectionLabel } from "@/components/marketing/section-label"
 import { Badge } from "@/components/ui/badge"
 import type { MemoryPinRead } from "@/lib/api/types"
 
@@ -9,44 +7,51 @@ type MemoryPinsPanelProps = {
 }
 
 function isMetricPayload(
-  pin: MemoryPinRead,
+  pin: MemoryPinRead
 ): pin is MemoryPinRead & { payload: { value: string; label: string } } {
   return pin.pin_type === "metric"
 }
 
 export function MemoryPinsPanel({ pins }: MemoryPinsPanelProps) {
   return (
-    <AppPanel className="p-4">
+    <section className="border-border/60 bg-card/40 rounded-lg border p-3">
       <div className="flex items-center gap-2">
-        <Pin className="text-muted-foreground size-4" aria-hidden="true" />
-        <SectionLabel index="02">Memory pins</SectionLabel>
+        <Pin className="text-muted-foreground size-3.5" aria-hidden="true" />
+        <h2 className="text-xs font-semibold tracking-tight">Memory pins</h2>
       </div>
-      <div className="mt-4 space-y-3">
+      <div className="mt-3 space-y-2">
         {pins.length === 0 ? (
-          <p className="text-muted-foreground text-sm leading-6">
-            Key facts will appear as you talk with the assistant.
+          <p className="text-muted-foreground text-xs leading-5">
+            Key facts appear here as you talk.
           </p>
         ) : (
           pins.map((pin) => (
             <div
               key={pin.id}
-              className="border-border/70 bg-muted/20 rounded-md border px-3 py-2.5"
+              className="border-border/60 bg-muted/15 rounded-md border px-2.5 py-2"
             >
-              <Badge variant="secondary" className="mb-2 capitalize">
+              <Badge
+                variant="secondary"
+                className="mb-1.5 h-5 px-1.5 text-[10px] capitalize"
+              >
                 {pin.pin_type}
               </Badge>
               {isMetricPayload(pin) ? (
                 <div>
-                  <p className="text-lg font-semibold tabular-nums">{pin.payload.value}</p>
-                  <p className="text-muted-foreground text-sm">{pin.payload.label}</p>
+                  <p className="text-base font-semibold tabular-nums">
+                    {pin.payload.value}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    {pin.payload.label}
+                  </p>
                 </div>
               ) : (
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-1.5">
                   <StickyNote
-                    className="text-muted-foreground mt-0.5 size-4 shrink-0"
+                    className="text-muted-foreground mt-0.5 size-3.5 shrink-0"
                     aria-hidden="true"
                   />
-                  <p className="text-sm leading-6">
+                  <p className="text-xs leading-5">
                     {"content" in pin.payload ? pin.payload.content : ""}
                   </p>
                 </div>
@@ -55,6 +60,6 @@ export function MemoryPinsPanel({ pins }: MemoryPinsPanelProps) {
           ))
         )}
       </div>
-    </AppPanel>
+    </section>
   )
 }
