@@ -269,12 +269,20 @@ All routes require auth and enforce project ownership.
 
 Version creation is currently for internal drafts only. It does not create docs, files, slide files, hosted pages, or public links.
 
+Artifact readiness uses internal source/version labels in this foundation version:
+
+- `Collecting`: blocked by missing or contradicted required Company Map fields.
+- `Draftable`: enough source exists for an internal draft, with caveats or labels.
+- `Source-ready`: required source is present for a slide-oriented internal version.
+- `Version-ready`: required source is present for a document-oriented internal version.
+- `Share review required`: required source is present for the future hosted-page surface, but public share/export safety has not been implemented.
+
 Example artifact detail fields:
 
 ```json
 {
   "id": "company_map",
-  "readiness": "Draftable",
+  "readiness": "Version-ready",
   "version_state": {
     "label": "Version 1 current",
     "detail": "This internal version matches the current source dependency hash."

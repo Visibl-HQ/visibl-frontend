@@ -386,7 +386,7 @@ function ArtifactDetailPanel({
             <Clock3 className="size-4" aria-hidden="true" />
             Version history
           </h4>
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1">
             {versions.length > 0 ? (
               versions.map((version) => (
                 <button

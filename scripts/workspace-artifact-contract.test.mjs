@@ -36,6 +36,9 @@ test("artifact cards show required readiness signals", () => {
   assert.match(hub, /data-testid="artifact-detail"/)
   assert.match(hub, /Create internal version/)
   assert.match(hub, /Version history/)
+  assert.match(hub, /max-h-64/)
+  assert.match(hub, /versions\.map/)
+  assert.match(hub, /overflow-y-auto/)
   assert.match(hub, /VersionPreview/)
   assert.match(hub, /source_snapshot_id/)
   assert.match(hub, /listArtifactVersions/)
@@ -207,4 +210,24 @@ test("workspace copy does not overclaim investor readiness", () => {
   for (const file of files) {
     assert.doesNotMatch(read(file), /investor-ready/i, file)
   }
+})
+
+test("artifact readiness copy stays internal to Goal 006", () => {
+  const files = [
+    "src/lib/api/types.ts",
+    "src/features/workspace/components/readiness-labels.tsx",
+    "src/features/workspace/components/artifact-hub-panel.tsx",
+    "docs/api/02-v1-api-reference.md",
+  ]
+
+  for (const file of files) {
+    const source = read(file)
+    assert.doesNotMatch(source, /Ready for PPT/, file)
+    assert.doesNotMatch(source, /Ready to share/, file)
+  }
+
+  const labels = read("src/features/workspace/components/readiness-labels.tsx")
+  assert.match(labels, /Source-ready/)
+  assert.match(labels, /Version-ready/)
+  assert.match(labels, /Share review required/)
 })

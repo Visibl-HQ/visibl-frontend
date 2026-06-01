@@ -234,9 +234,9 @@ export type CompanyMapCandidateRead = {
 export type ArtifactReadiness =
   | "Collecting"
   | "Draftable"
-  | "Ready for doc"
-  | "Ready for PPT"
-  | "Ready to share"
+  | "Source-ready"
+  | "Version-ready"
+  | "Share review required"
 
 export type SourceStrengthLabel =
   | "Missing"
