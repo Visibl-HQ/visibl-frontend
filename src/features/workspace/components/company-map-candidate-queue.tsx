@@ -24,7 +24,12 @@ type CompanyMapCandidateQueueProps = {
   reviewedCandidates: CompanyMapCandidateRead[]
   fields: CompanyMapFieldRead[]
   pendingCandidateId: string | null
+  staleCandidateId: string | null
   onAccept: (candidate: CompanyMapCandidateRead) => void | Promise<void>
+  onReplace: (
+    candidate: CompanyMapCandidateRead,
+    expectedRevisionId: string
+  ) => void | Promise<void>
   onEditAccept: (
     candidate: CompanyMapCandidateRead,
     value: string
@@ -50,7 +55,9 @@ export function CompanyMapCandidateQueue({
   reviewedCandidates,
   fields,
   pendingCandidateId,
+  staleCandidateId,
   onAccept,
+  onReplace,
   onEditAccept,
   onReject,
   onArchive,
@@ -96,11 +103,18 @@ export function CompanyMapCandidateQueue({
         </span>
       </div>
       {candidates.length > 0 ? (
-        <div className="divide-border/70 divide-y">
-          {candidates.slice(0, 4).map((candidate) => {
+        <div className="divide-border/70 max-h-[38rem] divide-y overflow-y-auto overscroll-contain">
+          {candidates.map((candidate) => {
             const field = fieldByKey.get(candidate.field_key)
             const isEditing = editingId === candidate.id
             const isPending = pendingCandidateId === candidate.id
+            const currentRevisionId = field?.revision_id ?? null
+            const isStaleAgainstCurrent = Boolean(
+              currentRevisionId &&
+              candidate.baseline_revision_id !== currentRevisionId
+            )
+            const showReplaceFlow =
+              staleCandidateId === candidate.id || isStaleAgainstCurrent
 
             return (
               <article key={candidate.id} className="px-4 py-3">
@@ -139,6 +153,18 @@ export function CompanyMapCandidateQueue({
                     {candidate.conflict_summary}
                   </p>
                 ) : null}
+                {showReplaceFlow ? (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                    <p className="font-medium">
+                      This suggestion was captured before the current field
+                      revision.
+                    </p>
+                    <p className="mt-1">
+                      Replace only if this source should overwrite the current
+                      value.
+                    </p>
+                  </div>
+                ) : null}
 
                 {isEditing ? (
                   <div className="mt-3 space-y-2">
@@ -152,7 +178,14 @@ export function CompanyMapCandidateQueue({
                         type="button"
                         size="sm"
                         disabled={isPending || draftValue.trim().length === 0}
-                        onClick={() => onEditAccept(candidate, draftValue)}
+                        onClick={async () => {
+                          try {
+                            await onEditAccept(candidate, draftValue)
+                            setEditingId(null)
+                          } catch {
+                            // The parent owns the visible error; keep the draft for retry.
+                          }
+                        }}
                       >
                         <Check className="size-3.5" aria-hidden="true" />
                         Accept edit
@@ -183,6 +216,20 @@ export function CompanyMapCandidateQueue({
                         <Check className="size-3.5" aria-hidden="true" />
                         Accept
                       </Button>
+                      {showReplaceFlow && currentRevisionId ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={isPending}
+                          onClick={() =>
+                            onReplace(candidate, currentRevisionId)
+                          }
+                        >
+                          <RotateCcw className="size-3.5" aria-hidden="true" />
+                          Replace current
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         size="sm"
@@ -262,7 +309,7 @@ export function CompanyMapCandidateQueue({
             </span>
           </div>
           <div className="mt-2 space-y-2">
-            {reviewedCandidates.slice(0, 5).map((candidate) => (
+            {reviewedCandidates.map((candidate) => (
               <div
                 key={candidate.id}
                 className="bg-muted/35 rounded-md px-2.5 py-2 text-xs"

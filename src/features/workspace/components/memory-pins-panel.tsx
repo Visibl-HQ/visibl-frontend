@@ -104,10 +104,22 @@ export function MemoryPinsPanel({
                         size="sm"
                         className="h-7 text-xs"
                         disabled={
+                          !onEdit ||
                           pendingPinId === pin.id ||
                           draftContent.trim().length === 0
                         }
-                        onClick={() => onEdit?.(pin, draftContent)}
+                        onClick={async () => {
+                          if (!onEdit) {
+                            return
+                          }
+
+                          try {
+                            await onEdit(pin, draftContent)
+                            setEditingId(null)
+                          } catch {
+                            // The parent owns the visible error; keep the draft for retry.
+                          }
+                        }}
                       >
                         <Check className="size-3" aria-hidden="true" />
                         Save

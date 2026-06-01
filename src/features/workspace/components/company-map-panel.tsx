@@ -15,9 +15,14 @@ type CompanyMapPanelProps = {
   companyMap: CompanyMapRead
   selectedFieldKey: string | null
   pendingCandidateId: string | null
+  staleCandidateId: string | null
   onSelectField: (field: CompanyMapFieldRead) => void
   onAcceptCandidate: (
     candidate: CompanyMapCandidateRead
+  ) => void | Promise<void>
+  onReplaceCandidate: (
+    candidate: CompanyMapCandidateRead,
+    expectedRevisionId: string
   ) => void | Promise<void>
   onEditAcceptCandidate: (
     candidate: CompanyMapCandidateRead,
@@ -39,8 +44,10 @@ export function CompanyMapPanel({
   companyMap,
   selectedFieldKey,
   pendingCandidateId,
+  staleCandidateId,
   onSelectField,
   onAcceptCandidate,
+  onReplaceCandidate,
   onEditAcceptCandidate,
   onRejectCandidate,
   onArchiveCandidate,
@@ -101,7 +108,9 @@ export function CompanyMapPanel({
             reviewedCandidates={companyMap.reviewed_candidates}
             fields={fields}
             pendingCandidateId={pendingCandidateId}
+            staleCandidateId={staleCandidateId}
             onAccept={onAcceptCandidate}
+            onReplace={onReplaceCandidate}
             onEditAccept={onEditAcceptCandidate}
             onReject={onRejectCandidate}
             onArchive={onArchiveCandidate}

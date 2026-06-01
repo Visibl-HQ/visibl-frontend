@@ -18,6 +18,7 @@ import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { sendChatMessage } from "@/lib/api/chat"
+import { ApiError } from "@/lib/api/client"
 import {
   acceptCandidate,
   archiveCandidate,
@@ -168,6 +169,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
   const [pendingCandidateId, setPendingCandidateId] = useState<string | null>(
     null
   )
+  const [staleCandidateId, setStaleCandidateId] = useState<string | null>(null)
 
   useEffect(() => {
     conversationPreviewsRef.current = conversationPreviews
@@ -745,6 +747,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             ? actionError.message
             : "Could not update pin."
         )
+        throw actionError
       } finally {
         setPendingPinId(null)
       }
@@ -798,12 +801,43 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       setError(null)
       try {
         await acceptCandidate(projectId, candidate.id)
+        setStaleCandidateId(null)
         await refreshCaptureState()
       } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          setStaleCandidateId(candidate.id)
+        }
         setError(
           actionError instanceof Error
             ? actionError.message
             : "Could not accept candidate."
+        )
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleReplaceCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead, expectedRevisionId: string) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await acceptCandidate(projectId, candidate.id, {
+          allow_replace: true,
+          expected_revision_id: expectedRevisionId,
+        })
+        setStaleCandidateId(null)
+        await refreshCaptureState()
+      } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          setStaleCandidateId(candidate.id)
+        }
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not replace current field."
         )
       } finally {
         setPendingCandidateId(null)
@@ -818,13 +852,18 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       setError(null)
       try {
         await editAcceptCandidate(projectId, candidate.id, value)
+        setStaleCandidateId(null)
         await refreshCaptureState()
       } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          setStaleCandidateId(candidate.id)
+        }
         setError(
           actionError instanceof Error
             ? actionError.message
             : "Could not accept edited candidate."
         )
+        throw actionError
       } finally {
         setPendingCandidateId(null)
       }
@@ -977,6 +1016,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         gridTemplateColumns={gridTemplateColumns}
         pendingPinId={pendingPinId}
         pendingCandidateId={pendingCandidateId}
+        staleCandidateId={staleCandidateId}
         onNewConversation={handleNewConversation}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
@@ -986,6 +1026,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         onArchivePin={handleArchivePin}
         onPromotePin={handlePromotePin}
         onAcceptCandidate={handleAcceptCandidate}
+        onReplaceCandidate={handleReplaceCandidate}
         onEditAcceptCandidate={handleEditAcceptCandidate}
         onRejectCandidate={handleRejectCandidate}
         onArchiveCandidate={handleArchiveCandidate}
@@ -1021,6 +1062,7 @@ type WorkspaceShellLayoutProps = {
   gridTemplateColumns: string
   pendingPinId: string | null
   pendingCandidateId: string | null
+  staleCandidateId: string | null
   onNewConversation: () => void | Promise<void>
   onSelectConversation: (conversationId: string) => void
   onDeleteConversation: (conversationId: string) => void | Promise<void>
@@ -1031,6 +1073,10 @@ type WorkspaceShellLayoutProps = {
   onPromotePin: (pin: MemoryPinRead) => void | Promise<void>
   onAcceptCandidate: (
     candidate: CompanyMapCandidateRead
+  ) => void | Promise<void>
+  onReplaceCandidate: (
+    candidate: CompanyMapCandidateRead,
+    expectedRevisionId: string
   ) => void | Promise<void>
   onEditAcceptCandidate: (
     candidate: CompanyMapCandidateRead,
@@ -1071,6 +1117,7 @@ function WorkspaceShellLayout({
   gridTemplateColumns,
   pendingPinId,
   pendingCandidateId,
+  staleCandidateId,
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
@@ -1080,6 +1127,7 @@ function WorkspaceShellLayout({
   onArchivePin,
   onPromotePin,
   onAcceptCandidate,
+  onReplaceCandidate,
   onEditAcceptCandidate,
   onRejectCandidate,
   onArchiveCandidate,
@@ -1237,11 +1285,13 @@ function WorkspaceShellLayout({
                 companyMap={workspace.company_map}
                 selectedFieldKey={selectedField?.key ?? null}
                 pendingCandidateId={pendingCandidateId}
+                staleCandidateId={staleCandidateId}
                 onSelectField={(field) => {
                   setSelectedFieldKey(field.key)
                   setWorkspaceMode("company-map")
                 }}
                 onAcceptCandidate={onAcceptCandidate}
+                onReplaceCandidate={onReplaceCandidate}
                 onEditAcceptCandidate={onEditAcceptCandidate}
                 onRejectCandidate={onRejectCandidate}
                 onArchiveCandidate={onArchiveCandidate}

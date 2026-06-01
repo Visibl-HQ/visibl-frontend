@@ -15,6 +15,11 @@ import type {
   WorkspaceRead,
 } from "@/lib/api/types"
 
+type CandidateReplaceOptions = {
+  expected_revision_id?: string | null
+  allow_replace?: boolean
+}
+
 export async function listProjects(params?: {
   limit?: number
   cursor?: string | null
@@ -101,24 +106,29 @@ export async function promotePin(
 
 export async function acceptCandidate(
   projectId: string,
-  candidateId: string
+  candidateId: string,
+  options?: CandidateReplaceOptions
 ): Promise<CompanyMapCandidateRead> {
   return apiJson<CompanyMapCandidateRead>(
     `/projects/${projectId}/company-map/candidates/${candidateId}/accept`,
-    { method: "POST" }
+    {
+      method: "POST",
+      ...(options ? { body: JSON.stringify(options) } : {}),
+    }
   )
 }
 
 export async function editAcceptCandidate(
   projectId: string,
   candidateId: string,
-  value: string
+  value: string,
+  options?: CandidateReplaceOptions
 ): Promise<CompanyMapCandidateRead> {
   return apiJson<CompanyMapCandidateRead>(
     `/projects/${projectId}/company-map/candidates/${candidateId}/edit-accept`,
     {
       method: "POST",
-      body: JSON.stringify({ value }),
+      body: JSON.stringify({ value, ...options }),
     }
   )
 }

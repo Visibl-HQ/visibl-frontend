@@ -81,14 +81,18 @@ test("candidate queue exposes review actions, audit trail, and source affordance
   const candidates = read(
     "src/features/workspace/components/company-map-candidate-queue.tsx"
   )
+  const projectsApi = read("src/lib/api/projects.ts")
+  const shell = read("src/features/workspace/components/workspace-shell.tsx")
 
   for (const contract of [
     /onAccept/,
+    /onReplace/,
     /onEditAccept/,
     /onReject/,
     /onArchive/,
     /onClarify/,
     /Reviewed candidates/,
+    /Replace current/,
     /source_document_id/,
     /source_document_label/,
     /Open chat context/,
@@ -96,6 +100,39 @@ test("candidate queue exposes review actions, audit trail, and source affordance
   ]) {
     assert.match(candidates, contract)
   }
+
+  assert.match(candidates, /candidates\.map/)
+  assert.doesNotMatch(candidates, /candidates\.slice\(0,\s*4\)/)
+  assert.match(candidates, /max-h-\[38rem\]/)
+  assert.match(candidates, /overflow-y-auto/)
+  assert.match(projectsApi, /allow_replace/)
+  assert.match(projectsApi, /expected_revision_id/)
+  assert.match(
+    shell,
+    /handleReplaceCandidate[\s\S]*allow_replace: true[\s\S]*expected_revision_id: expectedRevisionId/
+  )
+})
+
+test("candidate queue keeps more than four open candidates reachable", () => {
+  const candidates = read(
+    "src/features/workspace/components/company-map-candidate-queue.tsx"
+  )
+
+  assert.match(candidates, /candidates\.map/)
+  assert.match(candidates, /overflow-y-auto/)
+  assert.doesNotMatch(candidates, /slice\(0,\s*4\)/)
+})
+
+test("pin edit closes only after successful save", () => {
+  const pins = read("src/features/workspace/components/memory-pins-panel.tsx")
+  const shell = read("src/features/workspace/components/workspace-shell.tsx")
+
+  assert.match(
+    pins,
+    /await onEdit\(pin, draftContent\)[\s\S]*setEditingId\(null\)/
+  )
+  assert.match(pins, /keep the draft for retry/)
+  assert.match(shell, /handleEditPin[\s\S]*throw actionError/)
 })
 
 test("workspace refreshes pins and Company Map after review mutations", () => {
