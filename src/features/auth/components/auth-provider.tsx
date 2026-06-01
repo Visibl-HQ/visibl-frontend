@@ -24,12 +24,14 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
-const PUBLIC_AUTH_PATHS = new Set(["/", "/login", "/signup", "/auth/callback"])
+
+/** Marketing-only routes skip /me on first paint to avoid blocking the landing page. */
+const MARKETING_PATHS = new Set(["/"])
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname)
+  const skipSessionBootstrap = MARKETING_PATHS.has(pathname)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -52,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    if (isPublicPath) {
+    if (skipSessionBootstrap) {
       return () => {
         cancelled = true
       }
@@ -78,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [isPublicPath, pathname, refreshUser])
+  }, [skipSessionBootstrap, pathname, refreshUser])
 
   const logout = useCallback(async () => {
     try {
@@ -96,13 +98,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      isLoading: isPublicPath ? false : isLoading,
+      isLoading: skipSessionBootstrap ? false : isLoading,
       isAuthenticated: Boolean(user),
       refreshUser,
       logout,
       signIn,
     }),
-    [user, isPublicPath, isLoading, refreshUser, logout, signIn]
+    [user, skipSessionBootstrap, isLoading, refreshUser, logout, signIn]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
