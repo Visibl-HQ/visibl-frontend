@@ -1068,6 +1068,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         onRejectCandidate={handleRejectCandidate}
         onArchiveCandidate={handleArchiveCandidate}
         onClarifyCandidate={handleClarifyCandidate}
+        onArtifactVersionCreated={refreshCaptureState}
         onToggleLeftCollapse={() => setLeftCollapsed((current) => !current)}
         onToggleRightCollapse={() => setRightCollapsed((current) => !current)}
         onExpandRightSidebar={() => setRightCollapsed(false)}
@@ -1133,6 +1134,7 @@ type WorkspaceShellLayoutProps = {
   onClarifyCandidate: (
     candidate: CompanyMapCandidateRead
   ) => void | Promise<void>
+  onArtifactVersionCreated: () => void | Promise<void>
   onToggleLeftCollapse: () => void
   onToggleRightCollapse: () => void
   onExpandRightSidebar: () => void
@@ -1175,6 +1177,7 @@ function WorkspaceShellLayout({
   onRejectCandidate,
   onArchiveCandidate,
   onClarifyCandidate,
+  onArtifactVersionCreated,
   onToggleLeftCollapse,
   onToggleRightCollapse,
   onExpandRightSidebar,
@@ -1351,6 +1354,7 @@ function WorkspaceShellLayout({
                   setSelectedArtifactId(artifact.id)
                   setWorkspaceMode("artifact-hub")
                 }}
+                onArtifactVersionCreated={onArtifactVersionCreated}
               />
             ) : null}
             {workspaceMode === "chat" ? (

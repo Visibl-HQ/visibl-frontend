@@ -34,8 +34,13 @@ test("artifact cards show required readiness signals", () => {
   }
 
   assert.match(hub, /data-testid="artifact-detail"/)
-  assert.match(hub, /Preview placeholder/)
-  assert.match(hub, /Generation\/export disabled/)
+  assert.match(hub, /Create internal version/)
+  assert.match(hub, /Version history/)
+  assert.match(hub, /VersionPreview/)
+  assert.match(hub, /source_snapshot_id/)
+  assert.match(hub, /listArtifactVersions/)
+  assert.match(hub, /createArtifactVersion/)
+  assert.match(hub, /Version\/export status/)
 })
 
 test("company map and inspector keep blockers and contradictions visible", () => {

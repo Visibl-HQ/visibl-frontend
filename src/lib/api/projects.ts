@@ -2,6 +2,7 @@ import { apiJson } from "@/lib/api/client"
 import type {
   ArtifactHubRead,
   ArtifactRead,
+  ArtifactVersionRead,
   CompanyMapCandidateRead,
   CompanyMapRead,
   ConversationRead,
@@ -178,6 +179,35 @@ export async function getArtifact(
   artifactId: string
 ): Promise<ArtifactRead> {
   return apiJson<ArtifactRead>(`/projects/${projectId}/artifacts/${artifactId}`)
+}
+
+export async function createArtifactVersion(
+  projectId: string,
+  artifactId: string
+): Promise<ArtifactVersionRead> {
+  return apiJson<ArtifactVersionRead>(
+    `/projects/${projectId}/artifacts/${artifactId}/versions`,
+    { method: "POST" }
+  )
+}
+
+export async function listArtifactVersions(
+  projectId: string,
+  artifactId: string
+): Promise<ArtifactVersionRead[]> {
+  return apiJson<ArtifactVersionRead[]>(
+    `/projects/${projectId}/artifacts/${artifactId}/versions`
+  )
+}
+
+export async function getArtifactVersion(
+  projectId: string,
+  artifactId: string,
+  versionId: string
+): Promise<ArtifactVersionRead> {
+  return apiJson<ArtifactVersionRead>(
+    `/projects/${projectId}/artifacts/${artifactId}/versions/${versionId}`
+  )
 }
 
 export async function listConversations(

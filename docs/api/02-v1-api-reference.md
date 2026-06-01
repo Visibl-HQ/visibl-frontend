@@ -202,13 +202,116 @@ Response `WorkspaceRead`:
   "problem_customer_doc": {
     /* ProblemCustomerDocRead */
   },
+  "company_map": {
+    /* CompanyMapRead */
+  },
+  "artifact_hub": {
+    /* ArtifactHubRead */
+  },
   "user_display_name": "founder_username"
 }
 ```
 
 - `messages`: up to 50 most recent, ascending by `sequence`
 - `memory_pins`: active only (`is_archived: false`), conversation-scoped
+- `company_map`: canonical project field read model plus pending/reviewed candidates
+- `artifact_hub`: required artifact readiness, blocker, source-strength, stale, and version state
 - Use on workspace load and after navigation
+
+---
+
+## Company Map (`/projects/{project_id}/company-map`)
+
+All routes require auth and enforce project ownership.
+
+| Method | Path                                                             | Description                              |
+| ------ | ---------------------------------------------------------------- | ---------------------------------------- |
+| GET    | `/projects/{project_id}/company-map`                             | Current grouped Company Map fields       |
+| GET    | `/projects/{project_id}/company-map/candidates`                  | Pending and reviewed field candidates    |
+| POST   | `/projects/{project_id}/company-map/candidates/{id}/accept`      | Accept a candidate into a field revision |
+| POST   | `/projects/{project_id}/company-map/candidates/{id}/edit-accept` | Accept edited candidate value            |
+| POST   | `/projects/{project_id}/company-map/candidates/{id}/reject`      | Reject candidate                         |
+| POST   | `/projects/{project_id}/company-map/candidates/{id}/archive`     | Archive candidate                        |
+| POST   | `/projects/{project_id}/company-map/candidates/{id}/clarify`     | Mark candidate as needing clarification  |
+
+Candidate accept and edit-accept support stale replacement guards:
+
+```json
+{
+  "expected_revision_id": "uuid or null",
+  "allow_replace": true
+}
+```
+
+Artifact versions read from Company Map field revisions. Artifact routes must not silently rewrite Company Map fields or memory pins.
+
+---
+
+## Artifacts (`/projects/{project_id}/artifacts`)
+
+All routes require auth and enforce project ownership.
+
+| Method | Path                                                                   | Description                                            |
+| ------ | ---------------------------------------------------------------------- | ------------------------------------------------------ |
+| GET    | `/projects/{project_id}/artifacts`                                     | Artifact Hub with durable artifact/readiness state     |
+| GET    | `/projects/{project_id}/artifacts/{artifact_id}`                       | Artifact detail, current version state if present      |
+| POST   | `/projects/{project_id}/artifacts/{artifact_id}/versions`              | Create an internal source-backed deterministic version |
+| GET    | `/projects/{project_id}/artifacts/{artifact_id}/versions`              | List artifact versions, newest first                   |
+| GET    | `/projects/{project_id}/artifacts/{artifact_id}/versions/{version_id}` | Read one immutable artifact version                    |
+
+`GET /artifacts` lazily ensures one durable artifact row per required registry artifact and persists a readiness snapshot when the current dependency hash changes.
+
+`POST /versions` is synchronous and deterministic in this foundation version. It creates:
+
+- an immutable source snapshot from the current required Company Map fields;
+- an immutable artifact version with section IDs, field labels, support labels, source refs, and caveats;
+- a transactional `current_version_id` update only after the version row exists.
+
+Version creation is currently for internal drafts only. It does not create docs, files, slide files, hosted pages, or public links.
+
+Example artifact detail fields:
+
+```json
+{
+  "id": "company_map",
+  "readiness": "Draftable",
+  "version_state": {
+    "label": "Version 1 current",
+    "detail": "This internal version matches the current source dependency hash."
+  },
+  "current_version": {
+    "id": "uuid",
+    "version_number": 1,
+    "source_snapshot_id": "uuid",
+    "is_stale": false,
+    "content": {
+      "title": "Company Map internal draft",
+      "source_scope": "project",
+      "sections": [
+        {
+          "id": "field-company_name",
+          "field_key": "company_name",
+          "label": "Company name",
+          "value": "Acme Startup",
+          "support_label": "Share-safe",
+          "source_refs": [],
+          "caveats": []
+        }
+      ],
+      "caveats": []
+    },
+    "share_safety_status": "needs_review"
+  },
+  "can_create_version": true,
+  "create_version_disabled_reason": null
+}
+```
+
+Stale model:
+
+- version `dependency_hash` is compared to the current required Company Map field/source dependency hash;
+- stale versions remain internally readable;
+- stale versions are not represented as externally share-safe.
 
 ---
 
@@ -330,14 +433,14 @@ fetch(url, { credentials: "include" })
 
 ## Not available in v1 (do not build against)
 
-| Feature                          | Status                 |
-| -------------------------------- | ---------------------- |
-| PATCH project                    | Not implemented        |
-| DELETE project / conversation    | Not implemented        |
-| POST pin / PATCH checklist       | Tools only (assistant) |
-| List messages (standalone)       | Use workspace          |
-| Upload files                     | Not implemented        |
-| Git graph / commits              | Placeholder UI         |
-| Other doc types (GTM, TAM, deck) | Future                 |
-| Hosted public pages              | Future                 |
-| WebSocket chat                   | SSE only               |
+| Feature                        | Status                 |
+| ------------------------------ | ---------------------- |
+| PATCH project                  | Not implemented        |
+| DELETE project / conversation  | Not implemented        |
+| POST pin / PATCH checklist     | Tools only (assistant) |
+| List messages (standalone)     | Use workspace          |
+| Upload files                   | Not implemented        |
+| Git graph / commits            | Placeholder UI         |
+| Document and slide file export | Not implemented        |
+| Hosted public pages            | Future                 |
+| WebSocket chat                 | SSE only               |

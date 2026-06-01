@@ -280,6 +280,55 @@ export type ArtifactVersionState = {
   detail: string | null
 }
 
+export type ArtifactContentSection = {
+  id: string
+  label: string
+  field_key: string
+  value: string
+  support_label: FieldSupportLabel
+  source_refs: {
+    id: string
+    label: string
+    source_type: string
+    pin_id: string | null
+    message_id: string | null
+    document_id: string | null
+    document_label: string | null
+    summary: string
+  }[]
+  caveats: string[]
+}
+
+export type ArtifactVersionContent = {
+  schema_version: number
+  artifact_id: string
+  title: string
+  summary: string
+  source_snapshot_id: string
+  source_scope: string
+  sections: ArtifactContentSection[]
+  caveats: string[]
+}
+
+export type ArtifactVersionRead = {
+  id: string
+  artifact_id: string
+  version_number: number
+  created_at: string
+  source_snapshot_id: string
+  readiness_snapshot_id: string | null
+  dependency_hash: string
+  is_stale: boolean
+  stale_reason: string | null
+  content_schema_version: number
+  content: ArtifactVersionContent
+  rendered_markdown: string | null
+  generation_label: string
+  share_safety_status: string
+  created_by_kind: string
+  created_by_user_id: string | null
+}
+
 export type ArtifactRead = {
   id: string
   name: string
@@ -289,6 +338,9 @@ export type ArtifactRead = {
   blocker_count: number
   stale_status: ArtifactStaleStatus
   version_state: ArtifactVersionState | null
+  current_version: ArtifactVersionRead | null
+  can_create_version: boolean
+  create_version_disabled_reason: string | null
   next_best_action: NextBestAction
   blockers: ArtifactBlockerRead[]
   required_field_keys: string[]

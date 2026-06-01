@@ -1,16 +1,24 @@
 "use client"
 
-import { useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowRight,
   Ban,
   Clock3,
   FileText,
   Layers3,
+  Loader2,
+  Plus,
   ShieldAlert,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { ArtifactHubRead, ArtifactRead } from "@/lib/api/types"
+import { createArtifactVersion, listArtifactVersions } from "@/lib/api/projects"
+import type {
+  ArtifactHubRead,
+  ArtifactRead,
+  ArtifactVersionRead,
+} from "@/lib/api/types"
+import { formatRelativeDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { ReadinessBadge } from "@/features/workspace/components/readiness-labels"
 
@@ -18,12 +26,14 @@ type ArtifactHubPanelProps = {
   artifactHub: ArtifactHubRead
   selectedArtifactId: string | null
   onSelectArtifact: (artifact: ArtifactRead) => void
+  onArtifactVersionCreated?: (() => void | Promise<void>) | undefined
 }
 
 export function ArtifactHubPanel({
   artifactHub,
   selectedArtifactId,
   onSelectArtifact,
+  onArtifactVersionCreated,
 }: ArtifactHubPanelProps) {
   const detailRef = useRef<HTMLElement | null>(null)
   const selectedArtifact =
@@ -151,9 +161,11 @@ export function ArtifactHubPanel({
         </div>
 
         <ArtifactDetailPanel
+          projectId={artifactHub.project_id}
           artifact={selectedArtifact}
           className="order-first lg:order-none"
           detailRef={detailRef}
+          onArtifactVersionCreated={onArtifactVersionCreated}
         />
       </div>
     </section>
@@ -161,14 +173,60 @@ export function ArtifactHubPanel({
 }
 
 function ArtifactDetailPanel({
+  projectId,
   artifact,
   className,
   detailRef,
+  onArtifactVersionCreated,
 }: {
+  projectId: string
   artifact: ArtifactRead | null
   className?: string
   detailRef: React.Ref<HTMLElement>
+  onArtifactVersionCreated?: (() => void | Promise<void>) | undefined
 }) {
+  const [versions, setVersions] = useState<ArtifactVersionRead[]>([])
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null
+  )
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false)
+  const [versionError, setVersionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!artifact) {
+      return
+    }
+
+    let cancelled = false
+    void listArtifactVersions(projectId, artifact.id)
+      .then((items) => {
+        if (cancelled) {
+          return
+        }
+        setVersionError(null)
+        setVersions(items)
+        setSelectedVersionId((current) => {
+          if (current && items.some((item) => item.id === current)) {
+            return current
+          }
+          return artifact.current_version?.id ?? items[0]?.id ?? null
+        })
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setVersionError(
+            error instanceof Error
+              ? error.message
+              : "Could not load artifact versions."
+          )
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [artifact, projectId])
+
   if (!artifact) {
     return (
       <aside
@@ -183,6 +241,36 @@ function ArtifactDetailPanel({
         </p>
       </aside>
     )
+  }
+
+  const selectedVersion =
+    versions.find((version) => version.id === selectedVersionId) ??
+    artifact.current_version ??
+    versions[0] ??
+    null
+
+  async function handleCreateVersion() {
+    if (!artifact || !artifact.can_create_version) {
+      return
+    }
+
+    setIsCreatingVersion(true)
+    setVersionError(null)
+    try {
+      const created = await createArtifactVersion(projectId, artifact.id)
+      const nextVersions = await listArtifactVersions(projectId, artifact.id)
+      setVersions(nextVersions)
+      setSelectedVersionId(created.id)
+      await onArtifactVersionCreated?.()
+    } catch (error) {
+      setVersionError(
+        error instanceof Error
+          ? error.message
+          : "Could not create internal version."
+      )
+    } finally {
+      setIsCreatingVersion(false)
+    }
   }
 
   return (
@@ -209,17 +297,47 @@ function ArtifactDetailPanel({
 
       <div className="space-y-4 p-4">
         <div className="border-border/70 bg-background rounded-lg border p-4">
-          <div className="flex items-center gap-2">
-            <FileText
-              className="text-muted-foreground size-4"
-              aria-hidden="true"
-            />
-            <p className="text-sm font-medium">Preview placeholder</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <FileText
+                  className="text-muted-foreground size-4"
+                  aria-hidden="true"
+                />
+                <p className="text-sm font-medium">
+                  {selectedVersion
+                    ? selectedVersion.content.title
+                    : "No internal version yet"}
+                </p>
+              </div>
+              <p className="text-muted-foreground mt-2 text-xs">
+                {selectedVersion
+                  ? selectedVersion.content.summary
+                  : (artifact.create_version_disabled_reason ??
+                    "Create an internal draft version from the current Company Map source snapshot.")}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!artifact.can_create_version || isCreatingVersion}
+              onClick={handleCreateVersion}
+              title={artifact.create_version_disabled_reason ?? undefined}
+            >
+              {isCreatingVersion ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus className="size-3.5" aria-hidden="true" />
+              )}
+              Create internal version
+            </Button>
           </div>
-          <p className="text-muted-foreground mt-2 text-xs">
-            Draft preview appears here after generation is added. Current state
-            only proves readiness and source coverage.
-          </p>
+          {versionError ? (
+            <p className="text-destructive mt-3 text-xs">{versionError}</p>
+          ) : null}
+          {selectedVersion ? (
+            <VersionPreview version={selectedVersion} />
+          ) : null}
         </div>
 
         <div className="grid gap-2 text-xs">
@@ -239,7 +357,68 @@ function ArtifactDetailPanel({
               {artifact.version_state?.label ?? "No version"}
             </span>
           </div>
+          {selectedVersion ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Source snapshot</span>
+                <span className="max-w-[12rem] truncate font-medium">
+                  {selectedVersion.source_snapshot_id}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Created</span>
+                <span className="font-medium">
+                  {formatRelativeDate(selectedVersion.created_at)}
+                </span>
+              </div>
+              {selectedVersion.is_stale ? (
+                <p className="rounded-md bg-amber-500/10 px-2 py-1 text-amber-700 dark:text-amber-200">
+                  {selectedVersion.stale_reason ??
+                    "This version is stale because source state changed."}
+                </p>
+              ) : null}
+            </>
+          ) : null}
         </div>
+
+        <section>
+          <h4 className="flex items-center gap-2 text-sm font-medium">
+            <Clock3 className="size-4" aria-hidden="true" />
+            Version history
+          </h4>
+          <div className="mt-2 space-y-2">
+            {versions.length > 0 ? (
+              versions.map((version) => (
+                <button
+                  key={version.id}
+                  type="button"
+                  className={cn(
+                    "border-border/70 bg-background hover:bg-muted/50 flex w-full items-center justify-between gap-3 rounded-md border p-3 text-left text-xs transition-colors",
+                    selectedVersion?.id === version.id && "border-brand/70"
+                  )}
+                  onClick={() => setSelectedVersionId(version.id)}
+                >
+                  <span className="font-medium">
+                    Version {version.version_number}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-muted-foreground",
+                      version.is_stale && "text-amber-700 dark:text-amber-200"
+                    )}
+                  >
+                    {version.is_stale ? "Stale" : "Current"} -{" "}
+                    {formatRelativeDate(version.created_at)}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                No versions have been created for this artifact.
+              </p>
+            )}
+          </div>
+        </section>
 
         <section>
           <h4 className="flex items-center gap-2 text-sm font-medium">
@@ -296,7 +475,7 @@ function ArtifactDetailPanel({
         <div className="border-border/70 bg-background rounded-lg border p-3">
           <p className="flex items-center gap-2 text-xs font-medium">
             <Ban className="size-3.5" aria-hidden="true" />
-            Generation/export disabled
+            Version/export status
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
             {artifact.generation_disabled_reason}
@@ -307,5 +486,51 @@ function ArtifactDetailPanel({
         </div>
       </div>
     </aside>
+  )
+}
+
+function VersionPreview({ version }: { version: ArtifactVersionRead }) {
+  return (
+    <div className="mt-4 space-y-3">
+      {version.content.caveats.length > 0 ? (
+        <div className="rounded-md bg-amber-500/10 p-3">
+          <p className="text-xs font-medium text-amber-800 dark:text-amber-100">
+            Caveats
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-amber-800 dark:text-amber-100">
+            {version.content.caveats.map((caveat) => (
+              <li key={caveat}>{caveat}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+        {version.content.sections.map((section) => (
+          <section
+            key={section.id}
+            className="border-border/70 rounded-md border p-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h5 className="text-xs font-semibold">{section.label}</h5>
+              <span className="text-muted-foreground text-[11px]">
+                {section.support_label}
+              </span>
+            </div>
+            <p className="mt-2 text-xs">{section.value}</p>
+            {section.source_refs.length > 0 ? (
+              <p className="text-muted-foreground mt-2 line-clamp-2 text-[11px]">
+                Source:{" "}
+                {section.source_refs.map((source) => source.label).join(", ")}
+              </p>
+            ) : null}
+            {section.caveats.length > 0 ? (
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">
+                {section.caveats[0]}
+              </p>
+            ) : null}
+          </section>
+        ))}
+      </div>
+    </div>
   )
 }
