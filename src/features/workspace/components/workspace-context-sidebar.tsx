@@ -2,14 +2,32 @@
 
 import { FileText, PanelRight, PanelRightClose, Pin } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ArtifactInspector } from "@/features/workspace/components/artifact-inspector"
 import { MemoryPinsPanel } from "@/features/workspace/components/memory-pins-panel"
 import { ProblemCustomerDocCard } from "@/features/workspace/components/problem-customer-doc-card"
-import type { MemoryPinRead, ProblemCustomerDocRead } from "@/lib/api/types"
+import type {
+  ArtifactRead,
+  CompanyMapFieldRead,
+  MemoryPinRead,
+  ProblemCustomerDocRead,
+} from "@/lib/api/types"
 import { cn } from "@/lib/utils"
 
 type WorkspaceContextSidebarProps = {
   pins: MemoryPinRead[]
   doc: ProblemCustomerDocRead
+  fields?: CompanyMapFieldRead[]
+  selectedField?: CompanyMapFieldRead | null
+  selectedArtifact?: ArtifactRead | null
+  pendingPinId?: string | null
+  onConfirmPin?: ((pin: MemoryPinRead) => void | Promise<void>) | undefined
+  onEditPin?:
+    | ((pin: MemoryPinRead, content: string) => void | Promise<void>)
+    | undefined
+  onArchivePin?: ((pin: MemoryPinRead) => void | Promise<void>) | undefined
+  onPromotePin?: ((pin: MemoryPinRead) => void | Promise<void>) | undefined
+  onInspectPinSource?: ((pin: MemoryPinRead) => void) | undefined
+  onSelectPinField?: ((field: CompanyMapFieldRead) => void) | undefined
   collapsed: boolean
   onExpand: () => void
 }
@@ -102,16 +120,49 @@ export function WorkspaceContextSidebarCollapsed({
 export function WorkspaceContextSidebarContent({
   pins,
   doc,
+  fields = [],
+  selectedField = null,
+  selectedArtifact = null,
+  pendingPinId = null,
+  onConfirmPin,
+  onEditPin,
+  onArchivePin,
+  onPromotePin,
+  onInspectPinSource,
+  onSelectPinField,
 }: {
   pins: MemoryPinRead[]
   doc: ProblemCustomerDocRead
+  fields?: CompanyMapFieldRead[]
+  selectedField?: CompanyMapFieldRead | null
+  selectedArtifact?: ArtifactRead | null
+  pendingPinId?: string | null
+  onConfirmPin?: ((pin: MemoryPinRead) => void | Promise<void>) | undefined
+  onEditPin?:
+    | ((pin: MemoryPinRead, content: string) => void | Promise<void>)
+    | undefined
+  onArchivePin?: ((pin: MemoryPinRead) => void | Promise<void>) | undefined
+  onPromotePin?: ((pin: MemoryPinRead) => void | Promise<void>) | undefined
+  onInspectPinSource?: ((pin: MemoryPinRead) => void) | undefined
+  onSelectPinField?: ((field: CompanyMapFieldRead) => void) | undefined
 }) {
   return (
     <div
       data-lenis-prevent
       className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3"
     >
-      <MemoryPinsPanel pins={pins} />
+      <ArtifactInspector field={selectedField} artifact={selectedArtifact} />
+      <MemoryPinsPanel
+        pins={pins}
+        fields={fields}
+        pendingPinId={pendingPinId}
+        onConfirm={onConfirmPin}
+        onEdit={onEditPin}
+        onArchive={onArchivePin}
+        onPromote={onPromotePin}
+        onInspectSource={onInspectPinSource}
+        onSelectField={onSelectPinField}
+      />
       <ProblemCustomerDocCard doc={doc} />
     </div>
   )
@@ -120,6 +171,16 @@ export function WorkspaceContextSidebarContent({
 export function WorkspaceContextSidebar({
   pins,
   doc,
+  fields = [],
+  selectedField = null,
+  selectedArtifact = null,
+  pendingPinId = null,
+  onConfirmPin,
+  onEditPin,
+  onArchivePin,
+  onPromotePin,
+  onInspectPinSource,
+  onSelectPinField,
   collapsed,
   onExpand,
 }: WorkspaceContextSidebarProps) {
@@ -133,5 +194,20 @@ export function WorkspaceContextSidebar({
     )
   }
 
-  return <WorkspaceContextSidebarContent pins={pins} doc={doc} />
+  return (
+    <WorkspaceContextSidebarContent
+      pins={pins}
+      doc={doc}
+      fields={fields}
+      selectedField={selectedField}
+      selectedArtifact={selectedArtifact}
+      pendingPinId={pendingPinId}
+      onConfirmPin={onConfirmPin}
+      onEditPin={onEditPin}
+      onArchivePin={onArchivePin}
+      onPromotePin={onPromotePin}
+      onInspectPinSource={onInspectPinSource}
+      onSelectPinField={onSelectPinField}
+    />
+  )
 }

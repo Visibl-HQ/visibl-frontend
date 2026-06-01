@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { AppLogoBar } from "@/components/layout/app-logo-bar"
 import { AppPanel } from "@/components/marketing/app-panel"
@@ -17,13 +17,15 @@ import { useAuth } from "@/features/auth/components/auth-provider"
 
 export function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isAuthenticated, isLoading } = useAuth()
+  const accountCreated = searchParams.get("account") === "created"
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (!accountCreated && !isLoading && isAuthenticated) {
       router.replace("/projects")
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [accountCreated, isAuthenticated, isLoading, router])
 
   return (
     <AppShell>
@@ -55,6 +57,11 @@ export function LoginPage() {
               <h1 className={cn(typography.h2, "mt-3 text-2xl sm:text-3xl")}>
                 Welcome back
               </h1>
+              {accountCreated ? (
+                <p className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-950 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-100">
+                  Account created. Sign in to open your workspace.
+                </p>
+              ) : null}
               <p className="text-muted-foreground mt-3 text-sm leading-7">
                 Continue with Google to open your projects, conversations, and
                 workspace.
@@ -66,7 +73,14 @@ export function LoginPage() {
                 />
               </div>
               <p className="text-muted-foreground mt-6 text-xs leading-5">
-                New here? Google creates your account on first sign-in.
+                New here?{" "}
+                <Link
+                  href="/signup"
+                  className="text-foreground underline underline-offset-4"
+                >
+                  Create an account
+                </Link>
+                .
               </p>
             </AppPanel>
           )}

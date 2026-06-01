@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { ApiError } from "@/lib/api/client"
 import { getCurrentUser, logout as logoutRequest } from "@/lib/api/auth"
 import type { UserProfile } from "@/lib/api/types"
@@ -24,9 +24,12 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+const PUBLIC_AUTH_PATHS = new Set(["/", "/login", "/signup", "/auth/callback"])
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -49,8 +52,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
+    if (isPublicPath) {
+      return () => {
+        cancelled = true
+      }
+    }
+
     async function loadUser() {
       try {
+        setIsLoading(true)
         await refreshUser()
       } catch {
         if (!cancelled) {
@@ -68,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [refreshUser])
+  }, [isPublicPath, pathname, refreshUser])
 
   const logout = useCallback(async () => {
     try {
@@ -86,13 +96,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      isLoading,
+      isLoading: isPublicPath ? false : isLoading,
       isAuthenticated: Boolean(user),
       refreshUser,
       logout,
       signIn,
     }),
-    [user, isLoading, refreshUser, logout, signIn]
+    [user, isPublicPath, isLoading, refreshUser, logout, signIn]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

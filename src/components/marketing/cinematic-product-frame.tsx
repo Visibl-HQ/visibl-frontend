@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useMounted } from "@/hooks/use-mounted"
 import { cn } from "@/lib/utils"
 
 const scenes = [
@@ -48,8 +49,10 @@ export function CinematicProductFrame({ className }: { className?: string }) {
   const [index, setIndex] = React.useState(0)
   const [isVisible, setIsVisible] = React.useState(true)
   const reduceMotion = useReducedMotion()
+  const mounted = useMounted()
   const rootRef = React.useRef<HTMLDivElement>(null)
   const scene = scenes[index] ?? scenes[0]
+  const shouldAnimate = mounted && !reduceMotion
 
   React.useEffect(() => {
     const node = rootRef.current
@@ -67,12 +70,12 @@ export function CinematicProductFrame({ className }: { className?: string }) {
   }, [])
 
   React.useEffect(() => {
-    if (reduceMotion || !isVisible) return
+    if (!shouldAnimate || !isVisible) return
     const timer = window.setInterval(() => {
       setIndex((value) => (value + 1) % scenes.length)
     }, 3400)
     return () => window.clearInterval(timer)
-  }, [reduceMotion, isVisible])
+  }, [shouldAnimate, isVisible])
 
   return (
     <div
@@ -102,9 +105,9 @@ export function CinematicProductFrame({ className }: { className?: string }) {
               <AnimatePresence mode="wait">
                 <motion.div
                   key={scene.id}
-                  initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                  initial={shouldAnimate ? { opacity: 0, y: 12 } : false}
                   animate={{ opacity: 1, y: 0 }}
-                  {...(!reduceMotion ? { exit: { opacity: 0, y: -10 } } : {})}
+                  {...(shouldAnimate ? { exit: { opacity: 0, y: -10 } } : {})}
                   transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <p className="text-xs font-semibold tracking-[0.2em] text-cyan-600 uppercase dark:text-cyan-300">
@@ -149,7 +152,7 @@ export function CinematicProductFrame({ className }: { className?: string }) {
             <div className="relative min-h-[420px] overflow-hidden bg-[radial-gradient(circle_at_82%_10%,rgba(103,232,249,0.22),transparent_28%),radial-gradient(circle_at_12%_86%,rgba(217,226,255,0.32),transparent_36%),linear-gradient(135deg,#fffdf8,#eef7f4)] p-4 sm:min-h-[480px] sm:p-6 lg:min-h-[560px] dark:bg-[radial-gradient(circle_at_82%_10%,rgba(103,232,249,0.13),transparent_28%),radial-gradient(circle_at_10%_90%,rgba(96,165,250,0.11),transparent_32%),linear-gradient(135deg,#0b0d14,#10131d)]">
               <motion.div
                 aria-hidden="true"
-                {...(!reduceMotion
+                {...(shouldAnimate
                   ? {
                       animate: {
                         x: ["-35%", "135%"],
@@ -171,10 +174,10 @@ export function CinematicProductFrame({ className }: { className?: string }) {
                 <motion.div
                   key={scene.id}
                   initial={
-                    reduceMotion ? false : { opacity: 0, y: 18, scale: 0.98 }
+                    shouldAnimate ? { opacity: 0, y: 18, scale: 0.98 } : false
                   }
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  {...(!reduceMotion
+                  {...(shouldAnimate
                     ? { exit: { opacity: 0, y: -14, scale: 0.98 } }
                     : {})}
                   transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
@@ -219,6 +222,8 @@ function Surface({
 
 function ChatScene() {
   const reduceMotion = useReducedMotion()
+  const mounted = useMounted()
+  const shouldAnimate = mounted && !reduceMotion
 
   return (
     <Surface>
@@ -236,7 +241,7 @@ function ChatScene() {
         {[0, 1, 2].map((dot) => (
           <motion.span
             key={dot}
-            {...(!reduceMotion
+            {...(shouldAnimate
               ? {
                   animate: { y: [0, -4, 0] },
                   transition: {
@@ -256,6 +261,8 @@ function ChatScene() {
 
 function PinsScene() {
   const reduceMotion = useReducedMotion()
+  const mounted = useMounted()
+  const shouldAnimate = mounted && !reduceMotion
 
   return (
     <Surface>
@@ -269,9 +276,9 @@ function PinsScene() {
         ].map(([label, text], index) => (
           <motion.div
             key={label}
-            initial={reduceMotion ? false : { opacity: 0, x: -12 }}
+            initial={shouldAnimate ? { opacity: 0, x: -12 } : false}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: reduceMotion ? 0 : index * 0.09 }}
+            transition={{ delay: shouldAnimate ? index * 0.09 : 0 }}
             className="rounded-2xl border border-slate-950/8 bg-[#fbfaf4] p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.055]"
           >
             <div className="flex items-center justify-between">

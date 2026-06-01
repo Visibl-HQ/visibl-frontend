@@ -230,7 +230,7 @@ export const footerLinks = [
   { label: "Product", href: "#product" },
   { label: "Workflow", href: "#workflow" },
   { label: "Proof", href: "#proof" },
-  { label: "Sign in", href: "/login" },
+  { label: "Contact", href: "mailto:hello@visibl.me" },
 ]
 
 export const demoPins = [
