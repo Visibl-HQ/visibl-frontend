@@ -236,10 +236,12 @@ export function applyBindingUpdate(
   let nextState = setConversationBinding(state, adaptBinding(response.binding))
 
   if (response.checkpoint) {
-    nextState = upsertCheckpoint(
-      nextState,
-      adaptCheckpoint(response.checkpoint)
-    )
+    const adapted = adaptCheckpoint(response.checkpoint)
+    const existing = state.checkpoints.find((item) => item.id === adapted.id)
+
+    if (!existing) {
+      nextState = upsertCheckpoint(nextState, adapted)
+    }
   }
 
   return nextState

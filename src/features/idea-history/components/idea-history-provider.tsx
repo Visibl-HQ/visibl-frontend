@@ -36,7 +36,11 @@ import {
   getBranchById,
   getHeadCheckpoint,
   getMainBranch,
+  resolveBranchViewCheckpoint,
   resolveConversationBinding,
+  resolveDirtyBaseline,
+  branchHasOwnedCheckpoints,
+  switchConversationBranch,
 } from "@/features/idea-history/lib/history-state"
 import type {
   Branch,
@@ -99,6 +103,7 @@ type IdeaHistoryProviderProps = {
   pins: MemoryPinRead[]
   doc: ProblemCustomerDocRead
   messageCount: number
+  onApplyBranchMessageView?: (messageCount: number) => void
   onApplyCheckpointSnapshot?: (checkpoint: Checkpoint) => void
   onNavigateConversation?: (conversationId: string) => void
   children: React.ReactNode
@@ -133,6 +138,7 @@ export function IdeaHistoryProvider({
   pins,
   doc,
   messageCount,
+  onApplyBranchMessageView,
   onApplyCheckpointSnapshot,
   onNavigateConversation,
   children,
@@ -149,10 +155,15 @@ export function IdeaHistoryProvider({
   const [branchSuggestedName, setBranchSuggestedName] = useState("explore")
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const stateRef = useRef(state)
+  const appliedBranchViewKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    appliedBranchViewKeyRef.current = null
+  }, [conversationId])
 
   const clearActionError = useCallback(() => {
     setActionError(null)
@@ -169,10 +180,12 @@ export function IdeaHistoryProvider({
       )
 
       if (checkpoint) {
+        onApplyBranchMessageView?.(checkpoint.messageCount)
         onApplyCheckpointSnapshot?.(cloneCheckpointSnapshot(checkpoint))
+        appliedBranchViewKeyRef.current = `${conversationId}:${checkpoint.branchId}:${checkpoint.id}`
       }
     },
-    [onApplyCheckpointSnapshot]
+    [conversationId, onApplyBranchMessageView, onApplyCheckpointSnapshot]
   )
 
   useEffect(() => {
@@ -253,19 +266,10 @@ export function IdeaHistoryProvider({
     : undefined
   const isOnMain = activeBranch?.id === state.mainBranchId
 
-  const baselineCheckpoint = useMemo(() => {
-    if (!activeBinding?.lastCheckpointId) {
-      return headCheckpoint ?? null
-    }
-
-    return (
-      state.checkpoints.find(
-        (checkpoint) => checkpoint.id === activeBinding.lastCheckpointId
-      ) ??
-      headCheckpoint ??
-      null
-    )
-  }, [activeBinding, headCheckpoint, state.checkpoints])
+  const baselineCheckpoint = useMemo(
+    () => resolveDirtyBaseline(state, activeBinding),
+    [activeBinding, state]
+  )
 
   const dirtyChanges = useMemo(
     () =>
@@ -285,6 +289,49 @@ export function IdeaHistoryProvider({
   )
 
   const graphLayout = useMemo(() => buildGraphLayout(state), [state])
+
+  useEffect(() => {
+    if (
+      !conversationId ||
+      isDraftConversationId(conversationId) ||
+      isHistoryLoading ||
+      !onApplyBranchMessageView
+    ) {
+      return
+    }
+
+    const viewCheckpoint = resolveBranchViewCheckpoint(
+      state,
+      activeBinding.branchId,
+      activeBinding
+    )
+
+    if (!viewCheckpoint) {
+      return
+    }
+
+    const viewKey = `${conversationId}:${activeBinding.branchId}:${viewCheckpoint.id}:${messageCount}:${isDirty}`
+
+    if (appliedBranchViewKeyRef.current === viewKey) {
+      return
+    }
+
+    const viewMessageCount =
+      isDirty && messageCount > viewCheckpoint.messageCount
+        ? messageCount
+        : viewCheckpoint.messageCount
+
+    onApplyBranchMessageView(viewMessageCount)
+    appliedBranchViewKeyRef.current = viewKey
+  }, [
+    activeBinding,
+    conversationId,
+    isDirty,
+    isHistoryLoading,
+    messageCount,
+    onApplyBranchMessageView,
+    state,
+  ])
 
   const registerConversation = useCallback((nextConversationId: string) => {
     setState((current) =>
@@ -429,12 +476,45 @@ export function IdeaHistoryProvider({
       try {
         await updateBindingAndApply(branchId)
       } catch (error) {
+        const branch = getBranchById(stateRef.current, branchId)
+        const hasOwnedCheckpoints = branchHasOwnedCheckpoints(
+          stateRef.current,
+          branchId
+        )
+        const forkCheckpointId =
+          branch?.forkedFromCheckpointId ?? branch?.headCheckpointId ?? null
+        const forkCheckpoint = forkCheckpointId
+          ? stateRef.current.checkpoints.find(
+              (item) => item.id === forkCheckpointId
+            )
+          : undefined
+
+        if (branch && !hasOwnedCheckpoints && forkCheckpoint) {
+          setState((current) =>
+            switchConversationBranch(
+              current,
+              conversationId,
+              branchId,
+              forkCheckpoint.id
+            )
+          )
+          onApplyBranchMessageView?.(forkCheckpoint.messageCount)
+          onApplyCheckpointSnapshot?.(cloneCheckpointSnapshot(forkCheckpoint))
+          appliedBranchViewKeyRef.current = `${conversationId}:${branchId}:${forkCheckpoint.id}:${forkCheckpoint.messageCount}:false`
+          return
+        }
+
         setActionError(formatApiError(error, "Could not switch branch."))
       } finally {
         setIsActionPending(false)
       }
     },
-    [conversationId, updateBindingAndApply]
+    [
+      conversationId,
+      onApplyBranchMessageView,
+      onApplyCheckpointSnapshot,
+      updateBindingAndApply,
+    ]
   )
 
   const createBranch = useCallback(

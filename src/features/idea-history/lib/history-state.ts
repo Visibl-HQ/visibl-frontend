@@ -125,6 +125,75 @@ export function getHeadCheckpoint(
   )
 }
 
+export function resolveDirtyBaseline(
+  state: ProjectHistoryState,
+  binding: ConversationBinding
+): Checkpoint | null {
+  if (!binding.baseCheckpointId) {
+    return null
+  }
+
+  return (
+    state.checkpoints.find(
+      (checkpoint) => checkpoint.id === binding.baseCheckpointId
+    ) ?? null
+  )
+}
+
+export function resolveBranchViewCheckpoint(
+  state: ProjectHistoryState,
+  branchId: string,
+  binding: ConversationBinding
+): Checkpoint | null {
+  const branch = getBranchById(state, branchId)
+
+  if (!branch) {
+    return null
+  }
+
+  if (branch.headCheckpointId) {
+    const ownedHead = state.checkpoints.find(
+      (checkpoint) =>
+        checkpoint.id === branch.headCheckpointId &&
+        checkpoint.branchId === branchId
+    )
+
+    if (ownedHead) {
+      return ownedHead
+    }
+  }
+
+  const forkBaselineIds = [
+    branch.forkedFromCheckpointId,
+    binding.baseCheckpointId,
+  ]
+
+  for (const checkpointId of forkBaselineIds) {
+    if (!checkpointId) {
+      continue
+    }
+
+    const checkpoint = state.checkpoints.find(
+      (item) => item.id === checkpointId
+    )
+
+    if (checkpoint) {
+      return checkpoint
+    }
+  }
+
+  return null
+}
+
+export function branchHasOwnedCheckpoints(
+  state: ProjectHistoryState,
+  branchId: string
+): boolean {
+  return state.checkpoints.some(
+    (checkpoint) => checkpoint.branchId === branchId
+  )
+}
+
 export function slugifyBranchName(name: string): string {
   return name
     .trim()

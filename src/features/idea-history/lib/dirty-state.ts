@@ -47,11 +47,14 @@ export function computeDirtyChanges({
 
   const messageDelta = messageCount - baseline.messageCount
 
-  if (messageDelta > 0) {
+  if (messageDelta !== 0) {
     changes.push({
       kind: "message",
-      label: "New messages",
-      detail: `${messageDelta} since last checkpoint`,
+      label: messageDelta > 0 ? "New messages" : "Messages changed",
+      detail:
+        messageDelta > 0
+          ? `${messageDelta} since last checkpoint`
+          : `${baseline.messageCount} → ${messageCount}`,
     })
   }
 

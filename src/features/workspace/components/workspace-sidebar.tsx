@@ -1,9 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import {
-  ChevronLeft,
   GitBranch,
   MessageSquare,
   PanelLeft,
@@ -27,6 +25,41 @@ import { getConversationTitle } from "@/features/workspace/data/conversation-met
 import { cn } from "@/lib/utils"
 
 export type SidebarView = "chats" | "graph"
+
+type CollapsedSidebarBrandToggleProps = {
+  onToggle: () => void
+}
+
+/** Collapsed rail: Visibl mark by default; hover/focus swaps to expand icon (ChatGPT-style). */
+function CollapsedSidebarBrandToggle({
+  onToggle,
+}: CollapsedSidebarBrandToggleProps) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      className="group relative size-8 shrink-0"
+      aria-label="Expand conversations sidebar"
+      onClick={onToggle}
+    >
+      <span className="absolute inset-0 flex items-center justify-center group-hover:opacity-0 group-focus-visible:opacity-0 motion-safe:transition-opacity motion-safe:duration-150">
+        <AppLogoMark
+          href=""
+          showWordmark={false}
+          size="sm"
+          className="pointer-events-none"
+        />
+      </span>
+      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 motion-safe:transition-opacity motion-safe:duration-150">
+        <PanelLeft
+          className="text-muted-foreground size-4"
+          aria-hidden="true"
+        />
+      </span>
+    </Button>
+  )
+}
 
 type WorkspaceSidebarProps = {
   projectName: string
@@ -86,17 +119,11 @@ export function WorkspaceSidebar({
           className
         )}
       >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="size-8"
-          aria-label="Expand conversations sidebar"
-          onClick={onToggleCollapse}
-        >
-          <PanelLeft className="size-4" aria-hidden="true" />
-        </Button>
-        <AppLogoMark href="/projects" showWordmark={false} size="sm" />
+        {onToggleCollapse ? (
+          <CollapsedSidebarBrandToggle onToggle={onToggleCollapse} />
+        ) : (
+          <AppLogoMark href="/projects" showWordmark={false} size="sm" />
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -142,19 +169,8 @@ export function WorkspaceSidebar({
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div className="shrink-0 space-y-1 p-2">
-        <div className="flex items-center gap-1 px-0.5">
+        <div className="flex items-center justify-between gap-2 px-0.5">
           <AppLogoMark href="/projects" showWordmark={false} size="sm" />
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground h-8 min-w-0 flex-1 justify-start gap-1.5 px-2"
-          >
-            <Link href="/projects">
-              <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
-              <span className="truncate">Projects</span>
-            </Link>
-          </Button>
           {onToggleCollapse ? (
             <Button
               type="button"

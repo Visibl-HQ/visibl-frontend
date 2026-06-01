@@ -1,7 +1,11 @@
-import { useState } from "react"
+"use client"
+
+import { useMemo, useState } from "react"
 import {
   Archive,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Link2,
   MessageSquareText,
   Pencil,
@@ -13,6 +17,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { CompanyMapFieldRead, MemoryPinRead } from "@/lib/api/types"
+
+const PINS_PER_PAGE = 4
 
 type MemoryPinsPanelProps = {
   pins: MemoryPinRead[]
@@ -55,14 +61,60 @@ export function MemoryPinsPanel({
   onInspectSource,
   onSelectField,
 }: MemoryPinsPanelProps) {
+  const [page, setPage] = useState(0)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftContent, setDraftContent] = useState("")
 
+  const pageCount = Math.max(1, Math.ceil(pins.length / PINS_PER_PAGE))
+  const showPagination = pins.length > PINS_PER_PAGE
+  const effectivePage = Math.min(page, pageCount - 1)
+
+  const visiblePins = useMemo(() => {
+    const start = effectivePage * PINS_PER_PAGE
+    return pins.slice(start, start + PINS_PER_PAGE)
+  }, [effectivePage, pins])
+
   return (
     <section className="border-border/60 bg-card/40 rounded-lg border p-3">
-      <div className="flex items-center gap-2">
-        <Pin className="text-muted-foreground size-3.5" aria-hidden="true" />
-        <h2 className="text-xs font-semibold tracking-tight">Memory pins</h2>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Pin
+            className="text-muted-foreground size-3.5 shrink-0"
+            aria-hidden="true"
+          />
+          <h2 className="text-xs font-semibold tracking-tight">Memory pins</h2>
+        </div>
+        {showPagination ? (
+          <div className="flex shrink-0 items-center gap-0.5">
+            <span className="text-muted-foreground mr-1 text-[10px] tabular-nums">
+              {effectivePage + 1}/{pageCount}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground size-7"
+              aria-label="Previous memory pins page"
+              disabled={effectivePage === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              <ChevronLeft className="size-3.5" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground size-7"
+              aria-label="Next memory pins page"
+              disabled={effectivePage >= pageCount - 1}
+              onClick={() =>
+                setPage((current) => Math.min(pageCount - 1, current + 1))
+              }
+            >
+              <ChevronRight className="size-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
       </div>
       <div className="mt-3 space-y-2">
         {pins.length === 0 ? (
@@ -70,7 +122,7 @@ export function MemoryPinsPanel({
             Key facts appear here as you talk.
           </p>
         ) : (
-          pins.map((pin) => {
+          visiblePins.map((pin) => {
             const linkedField = fields.find(
               (field) => field.key === pin.field_key
             )

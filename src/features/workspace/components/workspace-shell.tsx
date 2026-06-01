@@ -134,6 +134,17 @@ function findCompanyMapField(
   )
 }
 
+function sliceMessagesForBranchView(
+  messages: ChatMessage[],
+  messageCount: number | null
+): ChatMessage[] {
+  if (messageCount === null) {
+    return messages
+  }
+
+  return messages.slice(0, messageCount)
+}
+
 export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
   const router = useRouter()
   const params = useParams<{ conversationId?: string }>()
@@ -145,6 +156,8 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
   const previewHydrationAbortRef = useRef<AbortController | null>(null)
   const conversationPreviewsRef = useRef<Record<string, string>>({})
   const assistantStreamRef = useRef("")
+  const allMessagesRef = useRef<ChatMessage[]>([])
+  const branchViewCountRef = useRef<number | null>(null)
   const [, startTransition] = useTransition()
 
   const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null)
@@ -211,6 +224,8 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
   useEffect(() => {
     activeConversationIdRef.current = conversationId
+    branchViewCountRef.current = null
+    allMessagesRef.current = []
   }, [conversationId])
 
   useEffect(() => {
@@ -231,8 +246,23 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         return
       }
 
+      const fullMessages = toChatMessages(nextWorkspace.messages)
+      allMessagesRef.current = fullMessages
+
       setWorkspace(nextWorkspace)
-      setMessages(toChatMessages(nextWorkspace.messages))
+      setMessages((current) => {
+        const limit = branchViewCountRef.current
+
+        if (limit === null) {
+          return fullMessages
+        }
+
+        const targetLength = Math.max(limit, current.length)
+        return fullMessages.slice(
+          0,
+          Math.min(targetLength, fullMessages.length)
+        )
+      })
       setMemoryPins(nextWorkspace.memory_pins)
       setProblemCustomerDoc(nextWorkspace.problem_customer_doc)
 
@@ -988,6 +1018,13 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     return `${left}px minmax(0, 1fr) ${right}px`
   }, [leftCollapsed, rightCollapsed])
 
+  const handleApplyBranchMessageView = useCallback((messageCount: number) => {
+    branchViewCountRef.current = messageCount
+    setMessages(
+      sliceMessagesForBranchView(allMessagesRef.current, messageCount)
+    )
+  }, [])
+
   const handleApplyCheckpointSnapshot = useCallback(
     (checkpoint: Checkpoint) => {
       setMemoryPins(checkpoint.pinsSnapshot.map((pin) => ({ ...pin })))
@@ -995,8 +1032,9 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         ...checkpoint.docSnapshot,
         checklist: { ...checkpoint.docSnapshot.checklist },
       })
+      handleApplyBranchMessageView(checkpoint.messageCount)
     },
-    []
+    [handleApplyBranchMessageView]
   )
 
   if (isBootstrapping) {
@@ -1031,6 +1069,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       pins={memoryPins}
       doc={problemCustomerDoc}
       messageCount={messages.length}
+      onApplyBranchMessageView={handleApplyBranchMessageView}
       onApplyCheckpointSnapshot={handleApplyCheckpointSnapshot}
       onNavigateConversation={handleSelectConversation}
     >
