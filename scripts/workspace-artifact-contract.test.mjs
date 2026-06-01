@@ -121,7 +121,21 @@ test("candidate queue exposes review actions, audit trail, and source affordance
     candidates,
     /await onEditReplace\([\s\S]*candidate,[\s\S]*draftValue,[\s\S]*currentRevisionId[\s\S]*setEditingId\(null\)/
   )
+  assert.match(candidates, /!showReplaceFlow \? \([\s\S]*Accept edit/)
   assert.match(candidates, /keep the draft for retry/)
+})
+
+test("stale candidate conflicts refresh current revisions before replacement retry", () => {
+  const shell = read("src/features/workspace/components/workspace-shell.tsx")
+
+  for (const contract of [
+    /handleAcceptCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
+    /handleReplaceCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
+    /handleEditAcceptCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
+    /handleEditReplaceCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
+  ]) {
+    assert.match(shell, contract)
+  }
 })
 
 test("candidate queue keeps more than four open candidates reachable", () => {

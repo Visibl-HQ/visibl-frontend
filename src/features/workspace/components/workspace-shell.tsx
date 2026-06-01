@@ -805,6 +805,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         await refreshCaptureState()
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
           setStaleCandidateId(candidate.id)
         }
         setError(
@@ -832,6 +833,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         await refreshCaptureState()
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
           setStaleCandidateId(candidate.id)
         }
         setError(
@@ -856,6 +858,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         await refreshCaptureState()
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
           setStaleCandidateId(candidate.id)
         }
         setError(
@@ -888,6 +891,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         await refreshCaptureState()
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
           setStaleCandidateId(candidate.id)
         }
         setError(

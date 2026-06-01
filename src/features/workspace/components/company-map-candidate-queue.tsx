@@ -180,22 +180,24 @@ export function CompanyMapCandidateQueue({
                       onChange={(event) => setDraftValue(event.target.value)}
                     />
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={isPending || draftValue.trim().length === 0}
-                        onClick={async () => {
-                          try {
-                            await onEditAccept(candidate, draftValue)
-                            setEditingId(null)
-                          } catch {
-                            // The parent owns the visible error; keep the draft for retry.
-                          }
-                        }}
-                      >
-                        <Check className="size-3.5" aria-hidden="true" />
-                        Accept edit
-                      </Button>
+                      {!showReplaceFlow ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isPending || draftValue.trim().length === 0}
+                          onClick={async () => {
+                            try {
+                              await onEditAccept(candidate, draftValue)
+                              setEditingId(null)
+                            } catch {
+                              // The parent owns the visible error; keep the draft for retry.
+                            }
+                          }}
+                        >
+                          <Check className="size-3.5" aria-hidden="true" />
+                          Accept edit
+                        </Button>
+                      ) : null}
                       {showReplaceFlow && currentRevisionId ? (
                         <Button
                           type="button"
