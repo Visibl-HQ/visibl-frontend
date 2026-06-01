@@ -1,13 +1,24 @@
 import { apiJson } from "@/lib/api/client"
 import type {
+  ArtifactHubRead,
+  ArtifactRead,
+  CompanyMapCandidateRead,
+  CompanyMapRead,
   ConversationRead,
   CreateConversationBody,
   CreateProjectBody,
   CursorPage,
+  MemoryPinRead,
+  MemoryPinUpdate,
   ProjectRead,
   ProjectSummaryRead,
   WorkspaceRead,
 } from "@/lib/api/types"
+
+type CandidateReplaceOptions = {
+  expected_revision_id?: string | null
+  allow_replace?: boolean
+}
 
 export async function listProjects(params?: {
   limit?: number
@@ -40,6 +51,133 @@ export async function createProject(
 
 export async function getProject(projectId: string): Promise<ProjectRead> {
   return apiJson<ProjectRead>(`/projects/${projectId}`)
+}
+
+export async function getCompanyMap(
+  projectId: string
+): Promise<CompanyMapRead> {
+  return apiJson<CompanyMapRead>(`/projects/${projectId}/company-map`)
+}
+
+export async function listPins(projectId: string): Promise<MemoryPinRead[]> {
+  return apiJson<MemoryPinRead[]>(`/projects/${projectId}/pins`)
+}
+
+export async function updatePin(
+  projectId: string,
+  pinId: string,
+  body: MemoryPinUpdate
+): Promise<MemoryPinRead> {
+  return apiJson<MemoryPinRead>(`/projects/${projectId}/pins/${pinId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function confirmPin(
+  projectId: string,
+  pinId: string
+): Promise<MemoryPinRead> {
+  return apiJson<MemoryPinRead>(
+    `/projects/${projectId}/pins/${pinId}/confirm`,
+    { method: "POST" }
+  )
+}
+
+export async function archivePin(
+  projectId: string,
+  pinId: string
+): Promise<MemoryPinRead> {
+  return apiJson<MemoryPinRead>(
+    `/projects/${projectId}/pins/${pinId}/archive`,
+    { method: "POST" }
+  )
+}
+
+export async function promotePin(
+  projectId: string,
+  pinId: string
+): Promise<CompanyMapCandidateRead> {
+  return apiJson<CompanyMapCandidateRead>(
+    `/projects/${projectId}/pins/${pinId}/promote`,
+    { method: "POST" }
+  )
+}
+
+export async function acceptCandidate(
+  projectId: string,
+  candidateId: string,
+  options?: CandidateReplaceOptions
+): Promise<CompanyMapCandidateRead> {
+  return apiJson<CompanyMapCandidateRead>(
+    `/projects/${projectId}/company-map/candidates/${candidateId}/accept`,
+    {
+      method: "POST",
+      ...(options ? { body: JSON.stringify(options) } : {}),
+    }
+  )
+}
+
+export async function editAcceptCandidate(
+  projectId: string,
+  candidateId: string,
+  value: string,
+  options?: CandidateReplaceOptions
+): Promise<CompanyMapCandidateRead> {
+  return apiJson<CompanyMapCandidateRead>(
+    `/projects/${projectId}/company-map/candidates/${candidateId}/edit-accept`,
+    {
+      method: "POST",
+      body: JSON.stringify({ value, ...options }),
+    }
+  )
+}
+
+export async function rejectCandidate(
+  projectId: string,
+  candidateId: string
+): Promise<CompanyMapCandidateRead> {
+  return apiJson<CompanyMapCandidateRead>(
+    `/projects/${projectId}/company-map/candidates/${candidateId}/reject`,
+    { method: "POST" }
+  )
+}
+
+export async function archiveCandidate(
+  projectId: string,
+  candidateId: string
+): Promise<CompanyMapCandidateRead> {
+  return apiJson<CompanyMapCandidateRead>(
+    `/projects/${projectId}/company-map/candidates/${candidateId}/archive`,
+    { method: "POST" }
+  )
+}
+
+export async function clarifyCandidate(
+  projectId: string,
+  candidateId: string,
+  question?: string
+): Promise<CompanyMapCandidateRead> {
+  return apiJson<CompanyMapCandidateRead>(
+    `/projects/${projectId}/company-map/candidates/${candidateId}/clarify`,
+    {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }
+  )
+}
+
+export async function listArtifacts(
+  projectId: string
+): Promise<ArtifactHubRead> {
+  return apiJson<ArtifactHubRead>(`/projects/${projectId}/artifacts`)
+}
+
+export async function getArtifact(
+  projectId: string,
+  artifactId: string
+): Promise<ArtifactRead> {
+  return apiJson<ArtifactRead>(`/projects/${projectId}/artifacts/${artifactId}`)
 }
 
 export async function listConversations(

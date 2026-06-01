@@ -45,6 +45,7 @@ Thumbs.db
 *.log
 playwright-report/
 test-results/
+/output/
 
 # typescript
 *.tsbuildinfo

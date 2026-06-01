@@ -1,6 +1,7 @@
 "use client"
 
 import { motion, useReducedMotion, type HTMLMotionProps } from "framer-motion"
+import { useMounted } from "@/hooks/use-mounted"
 import { fadeUp } from "@/lib/motion"
 
 type MotionDivProps = HTMLMotionProps<"div">
@@ -11,9 +12,11 @@ export function MotionDiv({
   ...props
 }: MotionDivProps) {
   const reduceMotion = useReducedMotion()
+  const mounted = useMounted()
+  const shouldAnimate = mounted && !reduceMotion
   const resolvedViewport = viewport ?? { once: true, amount: 0.2 }
 
-  if (reduceMotion) {
+  if (!shouldAnimate) {
     return <motion.div initial={false} viewport={resolvedViewport} {...props} />
   }
 

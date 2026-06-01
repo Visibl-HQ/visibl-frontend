@@ -74,13 +74,45 @@ export type NotePinPayload = {
 
 export type MemoryPinRead = {
   id: string
+  project_id: string | null
   conversation_id: string
-  pin_type: "metric" | "note"
+  pin_type:
+    | "fact"
+    | "founder_claim"
+    | "metric"
+    | "customer_quote"
+    | "validation_signal"
+    | "assumption"
+    | "risk"
+    | "insight"
+    | "investor_objection"
+    | "contradiction"
+    | "decision"
+    | "open_question"
+    | "task"
+    | "source_reference"
+    | "artifact_relevant_claim"
+    | "note"
   payload: MetricPinPayload | NotePinPayload
   is_archived: boolean
+  status: "suggested" | "confirmed" | "edited" | "promoted" | "archived"
+  title: string | null
+  content: string | null
+  field_key: string | null
   source_message_id: string | null
+  source_document_id: string | null
+  source_document_label: string | null
+  source_fingerprint: string | null
   created_at: string
   updated_at: string
+}
+
+export type MemoryPinUpdate = {
+  pin_type?: MemoryPinRead["pin_type"]
+  title?: string | null
+  content?: string | null
+  payload?: Record<string, unknown>
+  field_key?: string | null
 }
 
 export type ChecklistSectionKey =
@@ -109,12 +141,175 @@ export type ProblemCustomerDocRead = {
   updated_at: string
 }
 
+export type FieldSupportLabel =
+  | "Missing"
+  | "Weak"
+  | "Supported"
+  | "Share-safe"
+  | "Contradicted"
+
+export type EvidenceRead = {
+  id: string
+  label: string
+  detail: string
+  source_type: string
+  pin_id: string | null
+  message_id: string | null
+  document_id: string | null
+  document_label: string | null
+}
+
+export type FieldBlockerRead = {
+  id: string
+  message: string
+  severity: string
+  next_action: string
+}
+
+export type CompanyMapFieldRead = {
+  key: string
+  label: string
+  value: string | null
+  support_label: FieldSupportLabel
+  evidence: EvidenceRead[]
+  blockers: FieldBlockerRead[]
+  stale: boolean
+  stale_reason: string | null
+  next_action: string
+  revision_id: string | null
+  candidate_count: number
+  contradiction_count: number
+}
+
+export type CompanyMapGroupRead = {
+  key: string
+  label: string
+  description: string
+  fields: CompanyMapFieldRead[]
+}
+
+export type CompanyMapRead = {
+  project_id: string
+  groups: CompanyMapGroupRead[]
+  candidates: CompanyMapCandidateRead[]
+  reviewed_candidates: CompanyMapCandidateRead[]
+  capture_receipt: CaptureReceiptRead | null
+}
+
+export type CaptureReceiptRead = {
+  pin_count: number
+  candidate_count: number
+  contradiction_count: number
+  processing_state: "processed" | "processing"
+}
+
+export type CompanyMapCandidateRead = {
+  id: string
+  project_id: string
+  field_key: string
+  field_label: string
+  suggested_value: string
+  rationale: string
+  status:
+    | "suggested"
+    | "needs_clarification"
+    | "accepted"
+    | "rejected"
+    | "archived"
+  is_conflict: boolean
+  conflict_summary: string | null
+  source_pin_id: string | null
+  source_message_id: string | null
+  source_document_id: string | null
+  source_document_label: string | null
+  source_fingerprint: string
+  baseline_revision_id: string | null
+  edited_value: string | null
+  clarification_question: string | null
+  accepted_revision_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ArtifactReadiness =
+  | "Collecting"
+  | "Draftable"
+  | "Ready for doc"
+  | "Ready for PPT"
+  | "Ready to share"
+
+export type SourceStrengthLabel =
+  | "Missing"
+  | "Weak"
+  | "Mixed"
+  | "Supported"
+  | "Strong"
+
+export type ArtifactSourceStrength = {
+  label: SourceStrengthLabel
+  supported_fields: number
+  weak_fields: number
+  missing_fields: number
+  contradicted_fields: number
+  total_fields: number
+}
+
+export type ArtifactStaleStatus = {
+  is_stale: boolean
+  label: string
+  reason: string | null
+}
+
+export type NextBestAction = {
+  label: string
+  field_key: string | null
+  blocker_id: string | null
+}
+
+export type ArtifactBlockerRead = {
+  id: string
+  scope: "field" | "artifact"
+  message: string
+  severity: string
+  field_key: string | null
+  next_action: NextBestAction
+}
+
+export type ArtifactVersionState = {
+  label: string
+  detail: string | null
+}
+
+export type ArtifactRead = {
+  id: string
+  name: string
+  description: string
+  readiness: ArtifactReadiness
+  source_strength: ArtifactSourceStrength
+  blocker_count: number
+  stale_status: ArtifactStaleStatus
+  version_state: ArtifactVersionState | null
+  next_best_action: NextBestAction
+  blockers: ArtifactBlockerRead[]
+  required_field_keys: string[]
+  evidence: EvidenceRead[]
+  generation_disabled_reason: string
+  export_disabled_reason: string
+}
+
+export type ArtifactHubRead = {
+  project_id: string
+  artifacts: ArtifactRead[]
+}
+
 export type WorkspaceRead = {
   project: ProjectRead
   conversation: ConversationRead
   messages: MessageRead[]
   memory_pins: MemoryPinRead[]
   problem_customer_doc: ProblemCustomerDocRead
+  company_map: CompanyMapRead
+  artifact_hub: ArtifactHubRead
   user_display_name: string
 }
 
@@ -135,6 +330,7 @@ export type ChatDonePayload = {
   user_message_id: string
   problem_customer_doc: ProblemCustomerDocRead
   memory_pins: MemoryPinRead[]
+  company_map: CompanyMapRead
 }
 
 export type ApiErrorBody = {

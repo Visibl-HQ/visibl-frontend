@@ -11,20 +11,37 @@ import {
 import { flushSync } from "react-dom"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { Building2, FileStack, Loader2, MessageSquare } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { CollapsibleSidebar } from "@/components/layout/collapsible-sidebar"
 import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { sendChatMessage } from "@/lib/api/chat"
+import { ApiError } from "@/lib/api/client"
 import {
+  acceptCandidate,
+  archiveCandidate,
+  archivePin,
+  clarifyCandidate,
+  confirmPin,
   createConversation,
   deleteConversation,
+  editAcceptCandidate,
+  getCompanyMap,
   getProject,
   getWorkspace,
+  listArtifacts,
   listConversations,
+  listPins,
+  promotePin,
+  rejectCandidate,
+  updatePin,
 } from "@/lib/api/projects"
 import type {
+  ArtifactRead,
+  CompanyMapCandidateRead,
+  CompanyMapFieldRead,
   ConversationRead,
   MemoryPinRead,
   MessageRead,
@@ -33,6 +50,8 @@ import type {
 } from "@/lib/api/types"
 import { ChatPanel } from "@/features/workspace/components/chat-panel"
 import type { ChatMessage } from "@/features/workspace/components/chat-thread"
+import { ArtifactHubPanel } from "@/features/workspace/components/artifact-hub-panel"
+import { CompanyMapPanel } from "@/features/workspace/components/company-map-panel"
 import { CheckpointToolbar } from "@/features/idea-history/components/checkpoint-toolbar"
 import {
   IdeaHistoryProvider,
@@ -83,12 +102,36 @@ type WorkspaceShellProps = {
   projectId: string
 }
 
+type WorkspaceMode = "company-map" | "artifact-hub" | "chat"
+
 function toChatMessages(messages: MessageRead[]): ChatMessage[] {
   return messages.map((message) => ({ ...message }))
 }
 
 function truncatePreview(value: string, max = 96): string {
   return truncateConversationText(value, max)
+}
+
+function getFirstCompanyMapField(
+  workspace: WorkspaceRead
+): CompanyMapFieldRead | null {
+  return workspace.company_map.groups[0]?.fields[0] ?? null
+}
+
+function findCompanyMapField(
+  workspace: WorkspaceRead,
+  fieldKey: string | null
+): CompanyMapFieldRead | null {
+  if (!fieldKey) {
+    return getFirstCompanyMapField(workspace)
+  }
+
+  return (
+    workspace.company_map.groups
+      .flatMap((group) => group.fields)
+      .find((field) => field.key === fieldKey) ??
+    getFirstCompanyMapField(workspace)
+  )
 }
 
 export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
@@ -120,8 +163,13 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
   const [error, setError] = useState<string | null>(null)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
-  const [mobileContextCollapsed, setMobileContextCollapsed] = useState(false)
+  const [mobileContextCollapsed, setMobileContextCollapsed] = useState(true)
   const [sidebarView, setSidebarView] = useState<SidebarView>("chats")
+  const [pendingPinId, setPendingPinId] = useState<string | null>(null)
+  const [pendingCandidateId, setPendingCandidateId] = useState<string | null>(
+    null
+  )
+  const [staleCandidateId, setStaleCandidateId] = useState<string | null>(null)
 
   useEffect(() => {
     conversationPreviewsRef.current = conversationPreviews
@@ -271,10 +319,13 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
       try {
         if (isDraft) {
-          const [project, conversationPage] = await Promise.all([
-            getProject(projectId),
-            listConversations(projectId, { limit: 20 }),
-          ])
+          const [project, conversationPage, companyMap, artifactHub] =
+            await Promise.all([
+              getProject(projectId),
+              listConversations(projectId, { limit: 20 }),
+              getCompanyMap(projectId),
+              listArtifacts(projectId),
+            ])
 
           if (
             cancelled ||
@@ -283,7 +334,11 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             return
           }
 
-          const draftWorkspace = createDraftWorkspace(project)
+          const draftWorkspace = createDraftWorkspace(
+            project,
+            companyMap,
+            artifactHub
+          )
 
           setWorkspace(draftWorkspace)
           setMessages([])
@@ -574,6 +629,16 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             assistantStreamRef.current = ""
             setMemoryPins(payload.memory_pins)
             setProblemCustomerDoc(payload.problem_customer_doc)
+            setWorkspace((current) =>
+              current
+                ? {
+                    ...current,
+                    company_map: payload.company_map,
+                    memory_pins: payload.memory_pins,
+                    problem_customer_doc: payload.problem_customer_doc,
+                  }
+                : current
+            )
             setActivityLabel(null)
             setIsStreaming(false)
 
@@ -625,6 +690,281 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       rememberConversationPreview,
       router,
     ]
+  )
+
+  const refreshCaptureState = useCallback(async () => {
+    const [nextPins, nextCompanyMap, nextArtifactHub] = await Promise.all([
+      listPins(projectId),
+      getCompanyMap(projectId),
+      listArtifacts(projectId),
+    ])
+    setMemoryPins(nextPins)
+    setWorkspace((current) =>
+      current
+        ? {
+            ...current,
+            memory_pins: nextPins,
+            company_map: nextCompanyMap,
+            artifact_hub: nextArtifactHub,
+          }
+        : current
+    )
+  }, [projectId])
+
+  const handleConfirmPin = useCallback(
+    async (pin: MemoryPinRead) => {
+      setPendingPinId(pin.id)
+      setError(null)
+      try {
+        await confirmPin(projectId, pin.id)
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not confirm pin."
+        )
+      } finally {
+        setPendingPinId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleEditPin = useCallback(
+    async (pin: MemoryPinRead, content: string) => {
+      setPendingPinId(pin.id)
+      setError(null)
+      try {
+        await updatePin(projectId, pin.id, {
+          content,
+          payload: { ...pin.payload, content },
+        })
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not update pin."
+        )
+        throw actionError
+      } finally {
+        setPendingPinId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleArchivePin = useCallback(
+    async (pin: MemoryPinRead) => {
+      setPendingPinId(pin.id)
+      setError(null)
+      try {
+        await archivePin(projectId, pin.id)
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not archive pin."
+        )
+      } finally {
+        setPendingPinId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handlePromotePin = useCallback(
+    async (pin: MemoryPinRead) => {
+      setPendingPinId(pin.id)
+      setError(null)
+      try {
+        await promotePin(projectId, pin.id)
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Set a Company Map field before promoting this pin."
+        )
+      } finally {
+        setPendingPinId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleAcceptCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await acceptCandidate(projectId, candidate.id)
+        setStaleCandidateId(null)
+        await refreshCaptureState()
+      } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
+          setStaleCandidateId(candidate.id)
+        }
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not accept candidate."
+        )
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleReplaceCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead, expectedRevisionId: string) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await acceptCandidate(projectId, candidate.id, {
+          allow_replace: true,
+          expected_revision_id: expectedRevisionId,
+        })
+        setStaleCandidateId(null)
+        await refreshCaptureState()
+      } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
+          setStaleCandidateId(candidate.id)
+        }
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not replace current field."
+        )
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleEditAcceptCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead, value: string) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await editAcceptCandidate(projectId, candidate.id, value)
+        setStaleCandidateId(null)
+        await refreshCaptureState()
+      } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
+          setStaleCandidateId(candidate.id)
+        }
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not accept edited candidate."
+        )
+        throw actionError
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleEditReplaceCandidate = useCallback(
+    async (
+      candidate: CompanyMapCandidateRead,
+      value: string,
+      expectedRevisionId: string
+    ) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await editAcceptCandidate(projectId, candidate.id, value, {
+          allow_replace: true,
+          expected_revision_id: expectedRevisionId,
+        })
+        setStaleCandidateId(null)
+        await refreshCaptureState()
+      } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          await refreshCaptureState()
+          setStaleCandidateId(candidate.id)
+        }
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not replace current field with edited candidate."
+        )
+        throw actionError
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleRejectCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await rejectCandidate(projectId, candidate.id)
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not reject candidate."
+        )
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleArchiveCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await archiveCandidate(projectId, candidate.id)
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not archive candidate."
+        )
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
+  const handleClarifyCandidate = useCallback(
+    async (candidate: CompanyMapCandidateRead) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await clarifyCandidate(projectId, candidate.id)
+        await refreshCaptureState()
+      } catch (actionError) {
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not create clarifying question."
+        )
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
   )
 
   const conversationItems = useMemo(() => {
@@ -710,10 +1050,24 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         mobileContextCollapsed={mobileContextCollapsed}
         sidebarView={sidebarView}
         gridTemplateColumns={gridTemplateColumns}
+        pendingPinId={pendingPinId}
+        pendingCandidateId={pendingCandidateId}
+        staleCandidateId={staleCandidateId}
         onNewConversation={handleNewConversation}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
         onSend={handleSend}
+        onConfirmPin={handleConfirmPin}
+        onEditPin={handleEditPin}
+        onArchivePin={handleArchivePin}
+        onPromotePin={handlePromotePin}
+        onAcceptCandidate={handleAcceptCandidate}
+        onReplaceCandidate={handleReplaceCandidate}
+        onEditAcceptCandidate={handleEditAcceptCandidate}
+        onEditReplaceCandidate={handleEditReplaceCandidate}
+        onRejectCandidate={handleRejectCandidate}
+        onArchiveCandidate={handleArchiveCandidate}
+        onClarifyCandidate={handleClarifyCandidate}
         onToggleLeftCollapse={() => setLeftCollapsed((current) => !current)}
         onToggleRightCollapse={() => setRightCollapsed((current) => !current)}
         onExpandRightSidebar={() => setRightCollapsed(false)}
@@ -743,10 +1097,42 @@ type WorkspaceShellLayoutProps = {
   mobileContextCollapsed: boolean
   sidebarView: SidebarView
   gridTemplateColumns: string
+  pendingPinId: string | null
+  pendingCandidateId: string | null
+  staleCandidateId: string | null
   onNewConversation: () => void | Promise<void>
   onSelectConversation: (conversationId: string) => void
   onDeleteConversation: (conversationId: string) => void | Promise<void>
   onSend: (content: string) => Promise<void>
+  onConfirmPin: (pin: MemoryPinRead) => void | Promise<void>
+  onEditPin: (pin: MemoryPinRead, content: string) => void | Promise<void>
+  onArchivePin: (pin: MemoryPinRead) => void | Promise<void>
+  onPromotePin: (pin: MemoryPinRead) => void | Promise<void>
+  onAcceptCandidate: (
+    candidate: CompanyMapCandidateRead
+  ) => void | Promise<void>
+  onReplaceCandidate: (
+    candidate: CompanyMapCandidateRead,
+    expectedRevisionId: string
+  ) => void | Promise<void>
+  onEditAcceptCandidate: (
+    candidate: CompanyMapCandidateRead,
+    value: string
+  ) => void | Promise<void>
+  onEditReplaceCandidate: (
+    candidate: CompanyMapCandidateRead,
+    value: string,
+    expectedRevisionId: string
+  ) => void | Promise<void>
+  onRejectCandidate: (
+    candidate: CompanyMapCandidateRead
+  ) => void | Promise<void>
+  onArchiveCandidate: (
+    candidate: CompanyMapCandidateRead
+  ) => void | Promise<void>
+  onClarifyCandidate: (
+    candidate: CompanyMapCandidateRead
+  ) => void | Promise<void>
   onToggleLeftCollapse: () => void
   onToggleRightCollapse: () => void
   onExpandRightSidebar: () => void
@@ -771,10 +1157,24 @@ function WorkspaceShellLayout({
   mobileContextCollapsed,
   sidebarView,
   gridTemplateColumns,
+  pendingPinId,
+  pendingCandidateId,
+  staleCandidateId,
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
   onSend,
+  onConfirmPin,
+  onEditPin,
+  onArchivePin,
+  onPromotePin,
+  onAcceptCandidate,
+  onReplaceCandidate,
+  onEditAcceptCandidate,
+  onEditReplaceCandidate,
+  onRejectCandidate,
+  onArchiveCandidate,
+  onClarifyCandidate,
   onToggleLeftCollapse,
   onToggleRightCollapse,
   onExpandRightSidebar,
@@ -799,6 +1199,31 @@ function WorkspaceShellLayout({
     selectGraphNode,
     state,
   } = useIdeaHistory()
+  const [workspaceMode, setWorkspaceMode] =
+    useState<WorkspaceMode>("company-map")
+  const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(
+    () => getFirstCompanyMapField(workspace)?.key ?? null
+  )
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(
+    () => workspace.artifact_hub.artifacts[0]?.id ?? null
+  )
+  const selectedField = useMemo(
+    () => findCompanyMapField(workspace, selectedFieldKey),
+    [workspace, selectedFieldKey]
+  )
+  const selectedArtifact = useMemo<ArtifactRead | null>(
+    () =>
+      workspace.artifact_hub.artifacts.find(
+        (artifact) => artifact.id === selectedArtifactId
+      ) ??
+      workspace.artifact_hub.artifacts[0] ??
+      null,
+    [workspace, selectedArtifactId]
+  )
+  const companyMapFields = useMemo(
+    () => workspace.company_map.groups.flatMap((group) => group.fields),
+    [workspace.company_map.groups]
+  )
 
   const getNodeInsight = useCallback(
     (node: GitGraphNode): GraphNodeInsight | null => {
@@ -830,6 +1255,19 @@ function WorkspaceShellLayout({
 
     closeOneOff()
     openBranchDialog(suggested)
+  }
+
+  function handleInspectPinSource() {
+    setWorkspaceMode("chat")
+  }
+
+  function handleInspectCandidateSource() {
+    setWorkspaceMode("chat")
+  }
+
+  function handleSelectPinField(field: CompanyMapFieldRead) {
+    setSelectedFieldKey(field.key)
+    setWorkspaceMode("company-map")
   }
 
   return (
@@ -881,18 +1319,56 @@ function WorkspaceShellLayout({
             </div>
           ) : null}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {!isDraftConversation ? <CheckpointToolbar /> : null}
-            <ChatPanel
-              messages={messages}
-              activityLabel={activityLabel}
-              isStreaming={isStreaming}
-              error={error}
-              onSend={onSend}
-              {...(!isDraftConversation
-                ? { onExploreSeparately: openOneOff }
-                : {})}
-              className="min-h-0 flex-1"
+            <WorkspaceModeBar
+              mode={workspaceMode}
+              onModeChange={setWorkspaceMode}
             />
+            {workspaceMode === "company-map" ? (
+              <CompanyMapPanel
+                companyMap={workspace.company_map}
+                selectedFieldKey={selectedField?.key ?? null}
+                pendingCandidateId={pendingCandidateId}
+                staleCandidateId={staleCandidateId}
+                onSelectField={(field) => {
+                  setSelectedFieldKey(field.key)
+                  setWorkspaceMode("company-map")
+                }}
+                onAcceptCandidate={onAcceptCandidate}
+                onReplaceCandidate={onReplaceCandidate}
+                onEditAcceptCandidate={onEditAcceptCandidate}
+                onEditReplaceCandidate={onEditReplaceCandidate}
+                onRejectCandidate={onRejectCandidate}
+                onArchiveCandidate={onArchiveCandidate}
+                onClarifyCandidate={onClarifyCandidate}
+                onInspectCandidateSource={handleInspectCandidateSource}
+              />
+            ) : null}
+            {workspaceMode === "artifact-hub" ? (
+              <ArtifactHubPanel
+                artifactHub={workspace.artifact_hub}
+                selectedArtifactId={selectedArtifact?.id ?? null}
+                onSelectArtifact={(artifact) => {
+                  setSelectedArtifactId(artifact.id)
+                  setWorkspaceMode("artifact-hub")
+                }}
+              />
+            ) : null}
+            {workspaceMode === "chat" ? (
+              <>
+                {!isDraftConversation ? <CheckpointToolbar /> : null}
+                <ChatPanel
+                  messages={messages}
+                  activityLabel={activityLabel}
+                  isStreaming={isStreaming}
+                  error={error}
+                  onSend={onSend}
+                  {...(!isDraftConversation
+                    ? { onExploreSeparately: openOneOff }
+                    : {})}
+                  className="min-h-0 flex-1"
+                />
+              </>
+            ) : null}
           </div>
           {oneOffOpen ? (
             <OneOffExplorationPanel
@@ -932,6 +1408,16 @@ function WorkspaceShellLayout({
                 <WorkspaceContextSidebarContent
                   pins={memoryPins}
                   doc={problemCustomerDoc}
+                  fields={companyMapFields}
+                  selectedField={selectedField}
+                  selectedArtifact={selectedArtifact}
+                  pendingPinId={pendingPinId}
+                  onConfirmPin={onConfirmPin}
+                  onEditPin={onEditPin}
+                  onArchivePin={onArchivePin}
+                  onPromotePin={onPromotePin}
+                  onInspectPinSource={handleInspectPinSource}
+                  onSelectPinField={handleSelectPinField}
                 />
               )}
             </ContextSidebarShell>
@@ -941,7 +1427,7 @@ function WorkspaceShellLayout({
         <aside
           className={cn(
             "border-border/70 bg-surface shrink-0 border-t lg:hidden",
-            mobileContextCollapsed ? "max-h-12" : "max-h-[34vh]"
+            mobileContextCollapsed ? "max-h-12" : "max-h-[38vh]"
           )}
         >
           <div className="flex items-center justify-end px-2 py-1.5">
@@ -959,6 +1445,16 @@ function WorkspaceShellLayout({
             <WorkspaceContextSidebar
               pins={memoryPins}
               doc={problemCustomerDoc}
+              fields={companyMapFields}
+              selectedField={selectedField}
+              selectedArtifact={selectedArtifact}
+              pendingPinId={pendingPinId}
+              onConfirmPin={onConfirmPin}
+              onEditPin={onEditPin}
+              onArchivePin={onArchivePin}
+              onPromotePin={onPromotePin}
+              onInspectPinSource={handleInspectPinSource}
+              onSelectPinField={handleSelectPinField}
               collapsed={false}
               onExpand={onExpandMobileContext}
             />
@@ -972,5 +1468,53 @@ function WorkspaceShellLayout({
         </div>
       ) : null}
     </AppShell>
+  )
+}
+
+function WorkspaceModeBar({
+  mode,
+  onModeChange,
+}: {
+  mode: WorkspaceMode
+  onModeChange: (mode: WorkspaceMode) => void
+}) {
+  const items: {
+    mode: WorkspaceMode
+    label: string
+    icon: LucideIcon
+  }[] = [
+    { mode: "company-map", label: "Company Map", icon: Building2 },
+    { mode: "artifact-hub", label: "Artifact Hub", icon: FileStack },
+    { mode: "chat", label: "Chat", icon: MessageSquare },
+  ]
+
+  return (
+    <div className="border-border/70 bg-surface/70 shrink-0 border-b px-3 py-2">
+      <div
+        className="bg-muted/50 inline-flex max-w-full gap-1 rounded-lg p-1"
+        role="tablist"
+        aria-label="Workspace mode"
+      >
+        {items.map((item) => {
+          const Icon = item.icon
+          const selected = mode === item.mode
+          return (
+            <Button
+              key={item.mode}
+              type="button"
+              variant={selected ? "secondary" : "ghost"}
+              size="sm"
+              role="tab"
+              aria-selected={selected}
+              className="min-w-0 gap-1.5"
+              onClick={() => onModeChange(item.mode)}
+            >
+              <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{item.label}</span>
+            </Button>
+          )
+        })}
+      </div>
+    </div>
   )
 }

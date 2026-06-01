@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { motion, useInView, useReducedMotion } from "framer-motion"
+import { useMounted } from "@/hooks/use-mounted"
 import { cn } from "@/lib/utils"
 
 export function WordsPullUp({
@@ -16,6 +17,8 @@ export function WordsPullUp({
   const ref = React.useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: "-10% 0px" })
   const reduceMotion = useReducedMotion()
+  const mounted = useMounted()
+  const shouldAnimate = mounted && !reduceMotion
 
   return (
     <div ref={ref} className={cn("inline-flex flex-wrap", className)}>
@@ -23,9 +26,11 @@ export function WordsPullUp({
         <motion.span
           key={`${word}-${index}`}
           initial={
-            reduceMotion ? false : { y: 16, opacity: 0.38, filter: "blur(8px)" }
+            shouldAnimate
+              ? { y: 16, opacity: 0.38, filter: "blur(8px)" }
+              : false
           }
-          {...(isInView
+          {...(shouldAnimate && isInView
             ? { animate: { y: 0, opacity: 1, filter: "blur(0px)" } }
             : {})}
           transition={{

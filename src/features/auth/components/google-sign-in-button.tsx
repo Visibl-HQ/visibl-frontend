@@ -7,11 +7,13 @@ import { useAuth } from "@/features/auth/components/auth-provider"
 type GoogleSignInButtonProps = {
   returnTo?: string
   className?: string
+  children?: React.ReactNode
 }
 
 export function GoogleSignInButton({
   returnTo,
   className,
+  children = "Continue with Google",
 }: GoogleSignInButtonProps) {
   const { signIn } = useAuth()
 
@@ -22,7 +24,7 @@ export function GoogleSignInButton({
       onClick={() => signIn(returnTo)}
     >
       <LogIn className="size-4" aria-hidden="true" />
-      Continue with Google
+      {children}
     </Button>
   )
 }

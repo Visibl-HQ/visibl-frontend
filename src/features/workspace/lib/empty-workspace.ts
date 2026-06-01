@@ -1,4 +1,6 @@
 import type {
+  ArtifactHubRead,
+  CompanyMapRead,
   ChecklistSectionKey,
   ConversationRead,
   ProblemCustomerDocRead,
@@ -50,13 +52,19 @@ export function createDraftConversation(projectId: string): ConversationRead {
   }
 }
 
-export function createDraftWorkspace(project: ProjectRead): WorkspaceRead {
+export function createDraftWorkspace(
+  project: ProjectRead,
+  companyMap: CompanyMapRead,
+  artifactHub: ArtifactHubRead
+): WorkspaceRead {
   return {
     project,
     conversation: createDraftConversation(project.id),
     messages: [],
     memory_pins: [],
     problem_customer_doc: createEmptyProblemCustomerDoc(DRAFT_CONVERSATION_ID),
+    company_map: companyMap,
+    artifact_hub: artifactHub,
     user_display_name: "",
   }
 }
