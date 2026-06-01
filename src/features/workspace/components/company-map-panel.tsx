@@ -28,6 +28,11 @@ type CompanyMapPanelProps = {
     candidate: CompanyMapCandidateRead,
     value: string
   ) => void | Promise<void>
+  onEditReplaceCandidate: (
+    candidate: CompanyMapCandidateRead,
+    value: string,
+    expectedRevisionId: string
+  ) => void | Promise<void>
   onRejectCandidate: (
     candidate: CompanyMapCandidateRead
   ) => void | Promise<void>
@@ -49,6 +54,7 @@ export function CompanyMapPanel({
   onAcceptCandidate,
   onReplaceCandidate,
   onEditAcceptCandidate,
+  onEditReplaceCandidate,
   onRejectCandidate,
   onArchiveCandidate,
   onClarifyCandidate,
@@ -112,6 +118,7 @@ export function CompanyMapPanel({
             onAccept={onAcceptCandidate}
             onReplace={onReplaceCandidate}
             onEditAccept={onEditAcceptCandidate}
+            onEditReplace={onEditReplaceCandidate}
             onReject={onRejectCandidate}
             onArchive={onArchiveCandidate}
             onClarify={onClarifyCandidate}

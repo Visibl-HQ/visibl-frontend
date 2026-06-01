@@ -88,11 +88,13 @@ test("candidate queue exposes review actions, audit trail, and source affordance
     /onAccept/,
     /onReplace/,
     /onEditAccept/,
+    /onEditReplace/,
     /onReject/,
     /onArchive/,
     /onClarify/,
     /Reviewed candidates/,
     /Replace current/,
+    /Replace with edit/,
     /source_document_id/,
     /source_document_label/,
     /Open chat context/,
@@ -111,6 +113,15 @@ test("candidate queue exposes review actions, audit trail, and source affordance
     shell,
     /handleReplaceCandidate[\s\S]*allow_replace: true[\s\S]*expected_revision_id: expectedRevisionId/
   )
+  assert.match(
+    shell,
+    /handleEditReplaceCandidate[\s\S]*editAcceptCandidate\(projectId, candidate\.id, value,[\s\S]*allow_replace: true[\s\S]*expected_revision_id: expectedRevisionId/
+  )
+  assert.match(
+    candidates,
+    /await onEditReplace\([\s\S]*candidate,[\s\S]*draftValue,[\s\S]*currentRevisionId[\s\S]*setEditingId\(null\)/
+  )
+  assert.match(candidates, /keep the draft for retry/)
 })
 
 test("candidate queue keeps more than four open candidates reachable", () => {
@@ -121,6 +132,17 @@ test("candidate queue keeps more than four open candidates reachable", () => {
   assert.match(candidates, /candidates\.map/)
   assert.match(candidates, /overflow-y-auto/)
   assert.doesNotMatch(candidates, /slice\(0,\s*4\)/)
+})
+
+test("reviewed candidates remain reachable without stretching the panel", () => {
+  const candidates = read(
+    "src/features/workspace/components/company-map-candidate-queue.tsx"
+  )
+
+  assert.match(candidates, /reviewedCandidates\.map/)
+  assert.match(candidates, /max-h-72/)
+  assert.match(candidates, /overflow-y-auto/)
+  assert.doesNotMatch(candidates, /reviewedCandidates\.slice/)
 })
 
 test("pin edit closes only after successful save", () => {

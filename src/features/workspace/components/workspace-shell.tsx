@@ -871,6 +871,38 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     [projectId, refreshCaptureState]
   )
 
+  const handleEditReplaceCandidate = useCallback(
+    async (
+      candidate: CompanyMapCandidateRead,
+      value: string,
+      expectedRevisionId: string
+    ) => {
+      setPendingCandidateId(candidate.id)
+      setError(null)
+      try {
+        await editAcceptCandidate(projectId, candidate.id, value, {
+          allow_replace: true,
+          expected_revision_id: expectedRevisionId,
+        })
+        setStaleCandidateId(null)
+        await refreshCaptureState()
+      } catch (actionError) {
+        if (actionError instanceof ApiError && actionError.status === 409) {
+          setStaleCandidateId(candidate.id)
+        }
+        setError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Could not replace current field with edited candidate."
+        )
+        throw actionError
+      } finally {
+        setPendingCandidateId(null)
+      }
+    },
+    [projectId, refreshCaptureState]
+  )
+
   const handleRejectCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead) => {
       setPendingCandidateId(candidate.id)
@@ -1028,6 +1060,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         onAcceptCandidate={handleAcceptCandidate}
         onReplaceCandidate={handleReplaceCandidate}
         onEditAcceptCandidate={handleEditAcceptCandidate}
+        onEditReplaceCandidate={handleEditReplaceCandidate}
         onRejectCandidate={handleRejectCandidate}
         onArchiveCandidate={handleArchiveCandidate}
         onClarifyCandidate={handleClarifyCandidate}
@@ -1082,6 +1115,11 @@ type WorkspaceShellLayoutProps = {
     candidate: CompanyMapCandidateRead,
     value: string
   ) => void | Promise<void>
+  onEditReplaceCandidate: (
+    candidate: CompanyMapCandidateRead,
+    value: string,
+    expectedRevisionId: string
+  ) => void | Promise<void>
   onRejectCandidate: (
     candidate: CompanyMapCandidateRead
   ) => void | Promise<void>
@@ -1129,6 +1167,7 @@ function WorkspaceShellLayout({
   onAcceptCandidate,
   onReplaceCandidate,
   onEditAcceptCandidate,
+  onEditReplaceCandidate,
   onRejectCandidate,
   onArchiveCandidate,
   onClarifyCandidate,
@@ -1293,6 +1332,7 @@ function WorkspaceShellLayout({
                 onAcceptCandidate={onAcceptCandidate}
                 onReplaceCandidate={onReplaceCandidate}
                 onEditAcceptCandidate={onEditAcceptCandidate}
+                onEditReplaceCandidate={onEditReplaceCandidate}
                 onRejectCandidate={onRejectCandidate}
                 onArchiveCandidate={onArchiveCandidate}
                 onClarifyCandidate={onClarifyCandidate}

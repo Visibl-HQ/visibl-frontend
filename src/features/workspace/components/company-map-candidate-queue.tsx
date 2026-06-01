@@ -34,6 +34,11 @@ type CompanyMapCandidateQueueProps = {
     candidate: CompanyMapCandidateRead,
     value: string
   ) => void | Promise<void>
+  onEditReplace: (
+    candidate: CompanyMapCandidateRead,
+    value: string,
+    expectedRevisionId: string
+  ) => void | Promise<void>
   onReject: (candidate: CompanyMapCandidateRead) => void | Promise<void>
   onArchive: (candidate: CompanyMapCandidateRead) => void | Promise<void>
   onClarify: (candidate: CompanyMapCandidateRead) => void | Promise<void>
@@ -59,6 +64,7 @@ export function CompanyMapCandidateQueue({
   onAccept,
   onReplace,
   onEditAccept,
+  onEditReplace,
   onReject,
   onArchive,
   onClarify,
@@ -190,6 +196,29 @@ export function CompanyMapCandidateQueue({
                         <Check className="size-3.5" aria-hidden="true" />
                         Accept edit
                       </Button>
+                      {showReplaceFlow && currentRevisionId ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={isPending || draftValue.trim().length === 0}
+                          onClick={async () => {
+                            try {
+                              await onEditReplace(
+                                candidate,
+                                draftValue,
+                                currentRevisionId
+                              )
+                              setEditingId(null)
+                            } catch {
+                              // The parent owns the visible error; keep the draft for retry.
+                            }
+                          }}
+                        >
+                          <RotateCcw className="size-3.5" aria-hidden="true" />
+                          Replace with edit
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         size="sm"
@@ -308,7 +337,7 @@ export function CompanyMapCandidateQueue({
               {reviewedCandidates.length}
             </span>
           </div>
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 max-h-72 space-y-2 overflow-y-auto overscroll-contain">
             {reviewedCandidates.map((candidate) => (
               <div
                 key={candidate.id}
