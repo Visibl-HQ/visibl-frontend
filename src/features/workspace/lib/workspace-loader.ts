@@ -25,12 +25,13 @@ export type ProjectGlobals = {
 export async function loadProjectGlobals(
   projectPublicId: string
 ): Promise<ProjectGlobals> {
-  const [project, conversationPage, companyMap, artifactHub] = await Promise.all([
-    getProject(projectPublicId),
-    listConversations(projectPublicId, { limit: 20 }),
-    getCompanyMap(projectPublicId),
-    listArtifacts(projectPublicId),
-  ])
+  const [project, conversationPage, companyMap, artifactHub] =
+    await Promise.all([
+      getProject(projectPublicId),
+      listConversations(projectPublicId, { limit: 20 }),
+      getCompanyMap(projectPublicId),
+      listArtifacts(projectPublicId),
+    ])
 
   return {
     project,

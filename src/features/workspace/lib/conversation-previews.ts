@@ -99,7 +99,10 @@ export async function hydrateMissingConversationPreviews(input: {
     }
 
     try {
-      const workspace = await getWorkspace(input.projectId, conversation.public_id)
+      const workspace = await getWorkspace(
+        input.projectId,
+        conversation.public_id
+      )
 
       if (input.signal?.aborted) {
         return

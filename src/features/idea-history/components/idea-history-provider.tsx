@@ -659,7 +659,12 @@ export function IdeaHistoryProvider({
         }
       }
     },
-    [conversationId, onNavigateConversation, onNavigateToCheckpoint, updateBindingAndApply]
+    [
+      conversationId,
+      onNavigateConversation,
+      onNavigateToCheckpoint,
+      updateBindingAndApply,
+    ]
   )
 
   const mergeBranchToMain = useCallback(

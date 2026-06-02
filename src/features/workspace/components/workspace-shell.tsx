@@ -438,8 +438,7 @@ export function WorkspaceShell({
         void ensureProjectGlobals()
           .then((globals) =>
             getWorkspace(projectPublicId, requestedConversationId).then(
-              (bundle) =>
-                mergeConversationWithGlobals(bundle, globals)
+              (bundle) => mergeConversationWithGlobals(bundle, globals)
             )
           )
           .then((nextWorkspace) => {
@@ -546,10 +545,7 @@ export function WorkspaceShell({
   ])
 
   useEffect(() => {
-    if (
-      workspaceSection === "chat" &&
-      (conversationId || isBootstrapping)
-    ) {
+    if (workspaceSection === "chat" && (conversationId || isBootstrapping)) {
       return
     }
 
@@ -728,8 +724,9 @@ export function WorkspaceShell({
           router.replace(
             conversationPath(username, projectSlug, sendConversationId),
             {
-            scroll: false,
-          })
+              scroll: false,
+            }
+          )
         } catch (createError) {
           setError(
             createError instanceof Error
@@ -925,10 +922,14 @@ export function WorkspaceShell({
       router.replace(
         conversationPath(username, projectSlug, newConversationId),
         {
-        scroll: false,
-      })
+          scroll: false,
+        }
+      )
 
-      const nextWorkspace = await getWorkspace(projectPublicId, newConversationId)
+      const nextWorkspace = await getWorkspace(
+        projectPublicId,
+        newConversationId
+      )
       hydrateWorkspace(nextWorkspace)
 
       setConversations((current) =>
@@ -1309,7 +1310,7 @@ export function WorkspaceShell({
   const navConversationId =
     conversationId && !isDraftConversationId(conversationId)
       ? conversationId
-      : conversations[0]?.public_id ?? conversationId
+      : (conversations[0]?.public_id ?? conversationId)
 
   return (
     <IdeaHistoryProvider

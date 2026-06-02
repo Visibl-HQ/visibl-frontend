@@ -151,8 +151,7 @@ export function buildGraphLayout(state: ProjectHistoryState): GraphLayout {
 
   const connections = buildGraphConnections(nodes, state, laneMap)
   const laneValues = Array.from(laneMap.values())
-  const laneCount =
-    laneValues.length === 0 ? 1 : Math.max(...laneValues, 0) + 1
+  const laneCount = laneValues.length === 0 ? 1 : Math.max(...laneValues, 0) + 1
 
   return { nodes, connections, laneCount }
 }

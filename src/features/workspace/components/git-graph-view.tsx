@@ -2,7 +2,15 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { AlertCircle, GitBranch, GitMerge, Loader2, MapPin, RefreshCw, Sparkles } from "lucide-react"
+import {
+  AlertCircle,
+  GitBranch,
+  GitMerge,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {

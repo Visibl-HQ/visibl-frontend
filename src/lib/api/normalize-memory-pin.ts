@@ -74,7 +74,9 @@ export function normalizeMemoryPin(raw: unknown): MemoryPinRead | null {
   }
 
   const publicId =
-    readString(record.public_id) ?? readString(record.id) ?? readString(record.pin_id)
+    readString(record.public_id) ??
+    readString(record.id) ??
+    readString(record.pin_id)
 
   if (!publicId) {
     return null
@@ -90,8 +92,7 @@ export function normalizeMemoryPin(raw: unknown): MemoryPinRead | null {
     ? (statusRaw as MemoryPinRead["status"])
     : "confirmed"
 
-  const createdAt =
-    readString(record.created_at) ?? new Date(0).toISOString()
+  const createdAt = readString(record.created_at) ?? new Date(0).toISOString()
   const updatedAt = readString(record.updated_at) ?? createdAt
 
   return {
