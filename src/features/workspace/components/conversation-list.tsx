@@ -46,22 +46,22 @@ export function ConversationList({
   return (
     <ul className={cn("space-y-0.5 px-2 pb-2", className)}>
       {items.map(({ conversation, preview }, index) => {
-        const isActive = conversation.id === activeConversationId
+        const isActive = conversation.public_id === activeConversationId
         const title = getConversationTitle(conversation, preview)
         const git = ideaHistory
           ? getConversationGitMetaFromHistory(
               ideaHistory.state,
-              conversation.id
+              conversation.public_id
             )
-          : getConversationGitMeta(conversation.id, index)
+          : getConversationGitMeta(conversation.public_id, index)
         const summary = getConversationPreview(conversation, preview)
         const subtitle = getConversationSubtitle(conversation)
 
         return (
-          <li key={conversation.id} className="group relative">
+          <li key={conversation.public_id} className="group relative">
             <button
               type="button"
-              onClick={() => onSelectConversation(conversation.id)}
+              onClick={() => onSelectConversation(conversation.public_id)}
               className={cn(
                 "w-full rounded-lg px-2.5 py-2 pr-9 text-left transition-colors",
                 isActive
@@ -99,7 +99,7 @@ export function ConversationList({
                 aria-label="Delete conversation"
                 onClick={(event) => {
                   event.stopPropagation()
-                  void onDeleteConversation(conversation.id)
+                  void onDeleteConversation(conversation.public_id)
                 }}
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />

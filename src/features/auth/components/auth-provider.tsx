@@ -12,7 +12,10 @@ import { usePathname, useRouter } from "next/navigation"
 import { ApiError } from "@/lib/api/client"
 import { getCurrentUser, logout as logoutRequest } from "@/lib/api/auth"
 import type { UserProfile } from "@/lib/api/types"
-import { redirectToGoogleLogin } from "@/features/auth/lib/session"
+import {
+  consumeReturnTo,
+  redirectToGoogleLogin,
+} from "@/features/auth/lib/session"
 
 type AuthContextValue = {
   user: UserProfile | null
@@ -25,13 +28,16 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** Marketing-only routes skip /me on first paint to avoid blocking the landing page. */
+/** Marketing-only routes skip blocking /me on first paint. */
 const MARKETING_PATHS = new Set(["/"])
+const PUBLIC_SESSION_REDIRECT_PATHS = new Set(["/", "/login"])
+const PUBLIC_STATIC_PATHS = new Set(["/signup", "/auth/callback"])
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const skipSessionBootstrap = MARKETING_PATHS.has(pathname)
+  const skipBlockingBootstrap =
+    MARKETING_PATHS.has(pathname) || PUBLIC_STATIC_PATHS.has(pathname)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -54,7 +60,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    if (skipSessionBootstrap) {
+    if (PUBLIC_STATIC_PATHS.has(pathname)) {
+      setIsLoading(false)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    async function resolveSession(options: { redirectIfAuthed: boolean }) {
+      try {
+        const profile = await refreshUser()
+
+        if (
+          !cancelled &&
+          profile &&
+          options.redirectIfAuthed &&
+          PUBLIC_SESSION_REDIRECT_PATHS.has(pathname)
+        ) {
+          router.replace(consumeReturnTo("/projects"))
+        }
+      } catch {
+        if (!cancelled) {
+          setUser(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    if (MARKETING_PATHS.has(pathname)) {
+      setIsLoading(false)
+      void resolveSession({ redirectIfAuthed: true })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (PUBLIC_SESSION_REDIRECT_PATHS.has(pathname)) {
+      void resolveSession({ redirectIfAuthed: true })
       return () => {
         cancelled = true
       }
@@ -80,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [skipSessionBootstrap, pathname, refreshUser])
+  }, [pathname, refreshUser, router])
 
   const logout = useCallback(async () => {
     try {
@@ -98,13 +143,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      isLoading: skipSessionBootstrap ? false : isLoading,
+      isLoading: skipBlockingBootstrap ? false : isLoading,
       isAuthenticated: Boolean(user),
       refreshUser,
       logout,
       signIn,
     }),
-    [user, skipSessionBootstrap, isLoading, refreshUser, logout, signIn]
+    [user, skipBlockingBootstrap, isLoading, refreshUser, logout, signIn]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

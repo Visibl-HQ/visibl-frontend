@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { FileUp, MessageSquarePlus } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ChatMessageBubble } from "@/features/workspace/components/chat-message-bubble"
 import type { MessageRead } from "@/lib/api/types"
@@ -12,6 +14,7 @@ export type ChatMessage = MessageRead & {
 type ChatThreadProps = {
   messages: ChatMessage[]
   activityLabel?: string | null
+  onOpenIngestion?: () => void
   className?: string
 }
 
@@ -27,6 +30,7 @@ function isNearBottom(element: HTMLElement): boolean {
 export function ChatThread({
   messages,
   activityLabel,
+  onOpenIngestion,
   className,
 }: ChatThreadProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -91,10 +95,26 @@ export function ChatThread({
               Who is the customer, what problem are you solving, and what have
               you learned so far? Pins and your problem doc update as you talk.
             </p>
+            {onOpenIngestion ? (
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <Button type="button" onClick={onOpenIngestion}>
+                  <FileUp className="size-4" aria-hidden="true" />
+                  Import context
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onOpenIngestion}
+                >
+                  <MessageSquarePlus className="size-4" aria-hidden="true" />
+                  Paste notes or export
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : (
           messages.map((message) => (
-            <ChatMessageBubble key={message.id} message={message} />
+            <ChatMessageBubble key={message.public_id} message={message} />
           ))
         )}
 

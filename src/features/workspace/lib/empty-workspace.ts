@@ -43,12 +43,29 @@ export function createDraftConversation(projectId: string): ConversationRead {
   const now = new Date().toISOString()
 
   return {
-    id: DRAFT_CONVERSATION_ID,
-    project_id: projectId,
+    public_id: DRAFT_CONVERSATION_ID,
+    project_public_id: projectId,
     title: null,
     status: "active",
     created_at: now,
     updated_at: now,
+  }
+}
+
+export function createEmptyCompanyMap(projectId: string): CompanyMapRead {
+  return {
+    project_public_id: projectId,
+    groups: [],
+    candidates: [],
+    reviewed_candidates: [],
+    capture_receipt: null,
+  }
+}
+
+export function createEmptyArtifactHub(projectId: string): ArtifactHubRead {
+  return {
+    project_public_id: projectId,
+    artifacts: [],
   }
 }
 
@@ -59,7 +76,7 @@ export function createDraftWorkspace(
 ): WorkspaceRead {
   return {
     project,
-    conversation: createDraftConversation(project.id),
+    conversation: createDraftConversation(project.public_id),
     messages: [],
     memory_pins: [],
     problem_customer_doc: createEmptyProblemCustomerDoc(DRAFT_CONVERSATION_ID),

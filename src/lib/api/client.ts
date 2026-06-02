@@ -4,6 +4,8 @@ import type { ApiErrorBody } from "@/lib/api/types"
 export class ApiError extends Error {
   readonly status: number
   readonly body: ApiErrorBody | null
+  readonly code: string | null
+  readonly requestId: string | null
 
   constructor(
     status: number,
@@ -14,6 +16,8 @@ export class ApiError extends Error {
     this.name = "ApiError"
     this.status = status
     this.body = body
+    this.code = body?.error?.code ?? null
+    this.requestId = body?.error?.request_id ?? null
   }
 }
 
@@ -46,6 +50,10 @@ function formatErrorMessage(
 ): string {
   if (!body) {
     return fallback
+  }
+
+  if (body.error?.message) {
+    return body.error.message
   }
 
   if (typeof body.detail === "string") {

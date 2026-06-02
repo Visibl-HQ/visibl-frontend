@@ -1,5 +1,5 @@
-import { apiFetch, getApiV1Url } from "@/lib/api/client"
-import type { ChatDonePayload } from "@/lib/api/types"
+import { apiFetch, ApiError, getApiV1Url } from "@/lib/api/client"
+import type { ApiErrorBody, ChatDonePayload } from "@/lib/api/types"
 
 export type ChatStreamHandlers = {
   onTextDelta: (chunk: string) => void
@@ -122,7 +122,21 @@ export async function sendChatMessage(
   )
 
   if (!response.ok) {
-    handlers.onError(new Error(`Chat failed with status ${response.status}`))
+    let body: ApiErrorBody | null = null
+
+    try {
+      body = (await response.json()) as ApiErrorBody
+    } catch {
+      body = null
+    }
+
+    handlers.onError(
+      new ApiError(
+        response.status,
+        body?.error?.message ?? `Chat failed with status ${response.status}`,
+        body
+      )
+    )
     return
   }
 

@@ -10,13 +10,11 @@ import {
 } from "react"
 import { flushSync } from "react-dom"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
-import { Building2, FileStack, Loader2, MessageSquare } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+import { useParams, usePathname, useRouter } from "next/navigation"
+import { Loader2 } from "lucide-react"
 import { CollapsibleSidebar } from "@/components/layout/collapsible-sidebar"
 import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { sendChatMessage } from "@/lib/api/chat"
 import { ApiError } from "@/lib/api/client"
 import {
@@ -28,17 +26,12 @@ import {
   createConversation,
   deleteConversation,
   editAcceptCandidate,
-  getCompanyMap,
-  getProject,
-  getWorkspace,
-  listArtifacts,
-  listConversations,
-  listPins,
   promotePin,
   rejectCandidate,
   updatePin,
 } from "@/lib/api/projects"
 import type {
+  ApplyIngestionResponse,
   ArtifactRead,
   CompanyMapCandidateRead,
   CompanyMapFieldRead,
@@ -48,8 +41,12 @@ import type {
   ProblemCustomerDocRead,
   WorkspaceRead,
 } from "@/lib/api/types"
+import { normalizeMemoryPins } from "@/lib/api/normalize-memory-pin"
 import { ChatPanel } from "@/features/workspace/components/chat-panel"
 import type { ChatMessage } from "@/features/workspace/components/chat-thread"
+import { IngestionDialog } from "@/features/ingestion/components/ingestion-dialog"
+import { IngestionPreviewDialog } from "@/features/ingestion/components/ingestion-preview-dialog"
+import { useIngestionFlow } from "@/features/ingestion/hooks/use-ingestion-flow"
 import { ArtifactHubPanel } from "@/features/workspace/components/artifact-hub-panel"
 import { CompanyMapPanel } from "@/features/workspace/components/company-map-panel"
 import { CheckpointToolbar } from "@/features/idea-history/components/checkpoint-toolbar"
@@ -69,7 +66,7 @@ import {
   WorkspaceContextSidebarCollapsed,
   WorkspaceContextSidebarContent,
 } from "@/features/workspace/components/workspace-context-sidebar"
-import { WorkspaceHeader } from "@/features/workspace/components/workspace-header"
+import { ProjectWorkspaceNav } from "@/features/workspace/components/project-workspace-nav"
 import {
   WorkspaceSidebar,
   type SidebarView,
@@ -84,25 +81,69 @@ import {
   draftConversationPath,
   isDraftConversationId,
 } from "@/features/workspace/lib/conversation-routing"
-import { createDraftWorkspace } from "@/features/workspace/lib/empty-workspace"
 import {
   extractConversationPreview,
-  hydrateMissingConversationPreviews,
   loadStoredConversationPreviews,
   persistConversationPreviews,
 } from "@/features/workspace/lib/conversation-previews"
+import {
+  buildDraftWorkspaceFromGlobals,
+  buildDraftWorkspaceFromSectionGlobals,
+  loadConversationChatBootstrap,
+  loadProjectCaptureData,
+  loadProjectSidebarData,
+  mergeCaptureDataIntoWorkspace,
+  type NonChatWorkspaceSection,
+  type ProjectSectionGlobals,
+  type WorkspaceSliceState,
+} from "@/features/workspace/lib/workspace-loader"
+import {
+  deleteConversationWorkspaceCache,
+  patchConversationWorkspaceCache,
+  readConversationWorkspaceCache,
+  writeConversationWorkspaceCache,
+  type ConversationWorkspaceCacheEntry,
+} from "@/features/workspace/lib/workspace-cache"
+import { measureWorkspaceTiming } from "@/features/workspace/lib/workspace-timing"
+import {
+  companyMapPath,
+  resolveProjectWorkspaceSection,
+} from "@/features/workspace/lib/workspace-routing"
+import {
+  useConversationPreviewHydration,
+  useProjectGlobals,
+} from "@/features/workspace/components/workspace-data-provider"
+import { WorkspaceLayoutSkeleton } from "@/features/workspace/components/workspace-skeletons"
+import { WorkspaceHeader } from "@/features/workspace/components/workspace-header"
 import { cn } from "@/lib/utils"
 
 const LEFT_EXPANDED = 260
 const LEFT_COLLAPSED = 48
 const RIGHT_EXPANDED = 280
 const RIGHT_COLLAPSED = 48
-
-type WorkspaceShellProps = {
-  projectId: string
+const EMPTY_WORKSPACE_SLICES: WorkspaceSliceState = {
+  companyMap: false,
+  artifactHub: false,
+}
+const FULL_WORKSPACE_SLICES: WorkspaceSliceState = {
+  companyMap: true,
+  artifactHub: true,
 }
 
-type WorkspaceMode = "company-map" | "artifact-hub" | "chat"
+type ConversationCacheEntry = ConversationWorkspaceCacheEntry<ChatMessage>
+
+type WorkspaceShellProps = {
+  projectPublicId: string
+  username: string
+  projectSlug: string
+}
+
+function normalizeWorkspacePins(workspace: WorkspaceRead): WorkspaceRead {
+  return {
+    ...workspace,
+    memory_pins: normalizeMemoryPins(workspace.memory_pins),
+  }
+}
 
 function toChatMessages(messages: MessageRead[]): ChatMessage[] {
   return messages.map((message) => ({ ...message }))
@@ -145,27 +186,84 @@ function sliceMessagesForBranchView(
   return messages.slice(0, messageCount)
 }
 
-export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
+function isNonChatWorkspaceSection(
+  section: ReturnType<typeof resolveProjectWorkspaceSection>
+): section is NonChatWorkspaceSection {
+  return section === "company-map" || section === "artifacts"
+}
+
+function hasWorkspaceSlice(
+  slices: WorkspaceSliceState,
+  section: NonChatWorkspaceSection
+): boolean {
+  return section === "company-map" ? slices.companyMap : slices.artifactHub
+}
+
+function mergeSectionGlobalsIntoWorkspace(
+  current: WorkspaceRead | null,
+  globals: ProjectSectionGlobals,
+  currentSlices: WorkspaceSliceState
+): WorkspaceRead {
+  if (!current) {
+    return buildDraftWorkspaceFromSectionGlobals(globals)
+  }
+
+  return {
+    ...current,
+    project: globals.project,
+    company_map:
+      globals.slices.companyMap || !currentSlices.companyMap
+        ? globals.companyMap
+        : current.company_map,
+    artifact_hub:
+      globals.slices.artifactHub || !currentSlices.artifactHub
+        ? globals.artifactHub
+        : current.artifact_hub,
+  }
+}
+
+export function WorkspaceShell({
+  projectPublicId,
+  username,
+  projectSlug,
+}: WorkspaceShellProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams<{ conversationId?: string }>()
+  const workspaceSection = resolveProjectWorkspaceSection(
+    pathname,
+    username,
+    projectSlug
+  )
   const conversationId = params.conversationId ?? ""
   const hasBootstrappedRef = useRef(false)
+  const conversationsLoadedRef = useRef(false)
+  const captureDataLoadedRef = useRef(false)
+  const workspaceSlicesRef = useRef<WorkspaceSliceState>(EMPTY_WORKSPACE_SLICES)
   const activeConversationIdRef = useRef(conversationId)
+  const conversationCacheRef = useRef<Map<string, ConversationCacheEntry>>(
+    new Map()
+  )
   const skipConversationLoadRef = useRef<string | null>(null)
   const chatAbortRef = useRef<AbortController | null>(null)
-  const previewHydrationAbortRef = useRef<AbortController | null>(null)
   const conversationPreviewsRef = useRef<Record<string, string>>({})
   const assistantStreamRef = useRef("")
   const allMessagesRef = useRef<ChatMessage[]>([])
   const branchViewCountRef = useRef<number | null>(null)
+  const pendingCheckpointRestoreRef = useRef<Checkpoint | null>(null)
   const [, startTransition] = useTransition()
 
   const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null)
+  const [workspaceSlices, setWorkspaceSlices] = useState<WorkspaceSliceState>(
+    EMPTY_WORKSPACE_SLICES
+  )
+  const [loadingWorkspaceSection, setLoadingWorkspaceSection] =
+    useState<NonChatWorkspaceSection | null>(null)
   const [conversations, setConversations] = useState<ConversationRead[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [conversationPreviews, setConversationPreviews] = useState<
     Record<string, string>
-  >(() => loadStoredConversationPreviews(projectId))
+  >(() => loadStoredConversationPreviews(projectPublicId))
   const [memoryPins, setMemoryPins] = useState<MemoryPinRead[]>([])
   const [problemCustomerDoc, setProblemCustomerDoc] =
     useState<ProblemCustomerDocRead | null>(null)
@@ -183,6 +281,11 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     null
   )
   const [staleCandidateId, setStaleCandidateId] = useState<string | null>(null)
+  const [ingestionDialogOpen, setIngestionDialogOpen] = useState(false)
+
+  useEffect(() => {
+    workspaceSlicesRef.current = workspaceSlices
+  }, [workspaceSlices])
 
   useEffect(() => {
     conversationPreviewsRef.current = conversationPreviews
@@ -197,30 +300,30 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
         const next = { ...current, [targetConversationId]: preview }
         conversationPreviewsRef.current = next
-        persistConversationPreviews(projectId, next)
+        persistConversationPreviews(projectPublicId, next)
         return next
       })
     },
-    [projectId]
+    [projectPublicId]
   )
 
-  const queueConversationPreviewHydration = useCallback(
-    (items: ConversationRead[], activeConversationId: string) => {
-      previewHydrationAbortRef.current?.abort()
-      const controller = new AbortController()
-      previewHydrationAbortRef.current = controller
-
-      void hydrateMissingConversationPreviews({
-        projectId,
-        conversations: items,
-        activeConversationId,
-        knownPreviews: conversationPreviewsRef.current,
-        onPreview: rememberConversationPreview,
-        signal: controller.signal,
-      })
-    },
-    [projectId, rememberConversationPreview]
+  const getKnownConversationPreviews = useCallback(
+    () => conversationPreviewsRef.current,
+    []
   )
+  const {
+    ensureProjectGlobals,
+    ensureProjectSidebarData,
+    ensureProjectSectionGlobals,
+    patchProjectGlobals,
+    forgetConversationInProjectGlobals,
+  } = useProjectGlobals(projectPublicId)
+  const { queueConversationPreviewHydration, abortPreviewHydration } =
+    useConversationPreviewHydration({
+      projectPublicId,
+      rememberConversationPreview,
+      getKnownPreviews: getKnownConversationPreviews,
+    })
 
   useEffect(() => {
     activeConversationIdRef.current = conversationId
@@ -234,13 +337,14 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
     return () => {
       chatAbortRef.current?.abort()
-      previewHydrationAbortRef.current?.abort()
+      abortPreviewHydration()
     }
-  }, [conversationId])
+  }, [abortPreviewHydration, conversationId])
 
   const hydrateWorkspace = useCallback(
-    (nextWorkspace: WorkspaceRead) => {
-      const workspaceConversationId = nextWorkspace.conversation.id
+    (nextWorkspaceInput: WorkspaceRead) => {
+      const nextWorkspace = normalizeWorkspacePins(nextWorkspaceInput)
+      const workspaceConversationId = nextWorkspace.conversation.public_id
 
       if (workspaceConversationId !== activeConversationIdRef.current) {
         return
@@ -250,6 +354,10 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       allMessagesRef.current = fullMessages
 
       setWorkspace(nextWorkspace)
+      setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+      workspaceSlicesRef.current = FULL_WORKSPACE_SLICES
+      captureDataLoadedRef.current = true
+      setLoadingWorkspaceSection(null)
       setMessages((current) => {
         const limit = branchViewCountRef.current
 
@@ -265,6 +373,64 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       })
       setMemoryPins(nextWorkspace.memory_pins)
       setProblemCustomerDoc(nextWorkspace.problem_customer_doc)
+      setConversations((current) => {
+        if (
+          current.some(
+            (conversation) => conversation.public_id === workspaceConversationId
+          )
+        ) {
+          return current
+        }
+
+        return sortConversationsByRecent([
+          nextWorkspace.conversation,
+          ...current,
+        ])
+      })
+
+      writeConversationWorkspaceCache(
+        conversationCacheRef.current,
+        workspaceConversationId,
+        {
+          workspace: nextWorkspace,
+          messages: fullMessages,
+          memoryPins: nextWorkspace.memory_pins,
+          problemCustomerDoc: nextWorkspace.problem_customer_doc,
+        }
+      )
+
+      const pendingRestore = pendingCheckpointRestoreRef.current
+
+      if (
+        pendingRestore &&
+        pendingRestore.conversationId === workspaceConversationId
+      ) {
+        pendingCheckpointRestoreRef.current = null
+        branchViewCountRef.current = pendingRestore.messageCount
+        const restoredMessages = sliceMessagesForBranchView(
+          fullMessages,
+          pendingRestore.messageCount
+        )
+        setMessages(restoredMessages)
+        setMemoryPins(pendingRestore.pinsSnapshot.map((pin) => ({ ...pin })))
+        setProblemCustomerDoc({
+          ...pendingRestore.docSnapshot,
+          checklist: { ...pendingRestore.docSnapshot.checklist },
+        })
+        writeConversationWorkspaceCache(
+          conversationCacheRef.current,
+          workspaceConversationId,
+          {
+            workspace: nextWorkspace,
+            messages: restoredMessages,
+            memoryPins: pendingRestore.pinsSnapshot.map((pin) => ({ ...pin })),
+            problemCustomerDoc: {
+              ...pendingRestore.docSnapshot,
+              checklist: { ...pendingRestore.docSnapshot.checklist },
+            },
+          }
+        )
+      }
 
       const preview = extractConversationPreview(nextWorkspace)
 
@@ -276,7 +442,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
   )
 
   useEffect(() => {
-    if (!conversationId) {
+    if (workspaceSection !== "chat" || !conversationId) {
       return
     }
 
@@ -284,11 +450,86 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     const requestedConversationId = conversationId
     const isDraft = isDraftConversationId(requestedConversationId)
     const isFirstLoad = !hasBootstrappedRef.current
+    const cached = readConversationWorkspaceCache(
+      conversationCacheRef.current,
+      requestedConversationId
+    )
+    const isActiveRequest = () =>
+      !cancelled && requestedConversationId === activeConversationIdRef.current
+
+    async function refreshConversationList() {
+      if (conversationsLoadedRef.current) {
+        return
+      }
+
+      const sidebarData = await loadProjectSidebarData(projectPublicId)
+
+      if (!isActiveRequest()) {
+        return
+      }
+
+      setConversations(sidebarData.conversations)
+      patchProjectGlobals({ conversationList: sidebarData.conversations })
+      conversationsLoadedRef.current = true
+      queueConversationPreviewHydration(
+        sidebarData.conversations,
+        requestedConversationId
+      )
+    }
+
+    async function refreshCaptureData() {
+      if (captureDataLoadedRef.current) {
+        return
+      }
+
+      const captureData = await loadProjectCaptureData(projectPublicId)
+
+      if (!isActiveRequest()) {
+        return
+      }
+
+      setMemoryPins(captureData.memoryPins)
+      patchProjectGlobals({
+        companyMap: captureData.companyMap,
+        artifacts: captureData.artifactHub,
+      })
+      setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+      setWorkspace((current) =>
+        current ? mergeCaptureDataIntoWorkspace(current, captureData) : current
+      )
+      patchConversationWorkspaceCache(
+        conversationCacheRef.current,
+        requestedConversationId,
+        (cacheEntry) => ({
+          ...cacheEntry,
+          workspace: mergeCaptureDataIntoWorkspace(
+            cacheEntry.workspace,
+            captureData
+          ),
+          memoryPins: captureData.memoryPins,
+        })
+      )
+      captureDataLoadedRef.current = true
+    }
+
+    function refreshDeferredProjectData(options?: {
+      includeCapture?: boolean
+    }) {
+      void refreshConversationList().catch(() => {
+        // Sidebar can stay sparse if the deferred list refresh fails.
+      })
+
+      if (options?.includeCapture) {
+        void refreshCaptureData().catch(() => {
+          // The bootstrap workspace already has capture data.
+        })
+      }
+    }
 
     async function loadWorkspace() {
       if (isFirstLoad) {
         setIsBootstrapping(true)
-      } else if (!isDraft) {
+      } else if (!isDraft && !cached) {
         setIsConversationLoading(true)
       }
 
@@ -298,40 +539,32 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       ) {
         skipConversationLoadRef.current = null
 
-        try {
-          const conversationPage = await listConversations(projectId, {
-            limit: 20,
-          })
-
-          if (
-            !cancelled &&
-            requestedConversationId === activeConversationIdRef.current
-          ) {
-            const sorted = sortConversationsByRecent(conversationPage.items)
-            setConversations(sorted)
-            queueConversationPreviewHydration(sorted, requestedConversationId)
-            hasBootstrappedRef.current = true
-          }
-        } catch (loadError) {
-          if (
-            !cancelled &&
-            requestedConversationId === activeConversationIdRef.current
-          ) {
-            setError(
-              loadError instanceof Error
-                ? loadError.message
-                : "Could not load conversations."
-            )
-          }
-        } finally {
-          if (
-            !cancelled &&
-            requestedConversationId === activeConversationIdRef.current
-          ) {
-            setIsBootstrapping(false)
-            setIsConversationLoading(false)
-          }
+        if (isActiveRequest()) {
+          hasBootstrappedRef.current = true
+          setIsBootstrapping(false)
+          setIsConversationLoading(false)
+          refreshDeferredProjectData({ includeCapture: true })
         }
+
+        return
+      }
+
+      if (cached && !isDraft) {
+        setWorkspace(cached.workspace)
+        setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+        setLoadingWorkspaceSection(null)
+        setMessages(cached.messages)
+        setMemoryPins(cached.memoryPins)
+        setProblemCustomerDoc(cached.problemCustomerDoc)
+        allMessagesRef.current = cached.messages
+        setIsStreaming(false)
+        setActivityLabel(null)
+        setError(null)
+        hasBootstrappedRef.current = true
+        setIsBootstrapping(false)
+        setIsConversationLoading(false)
+
+        refreshDeferredProjectData()
 
         return
       }
@@ -341,7 +574,6 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         requestedConversationId === activeConversationIdRef.current &&
         !skipConversationLoadRef.current
       ) {
-        setMessages([])
         setIsStreaming(false)
         setActivityLabel(null)
         setError(null)
@@ -349,60 +581,47 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
       try {
         if (isDraft) {
-          const [project, conversationPage, companyMap, artifactHub] =
-            await Promise.all([
-              getProject(projectId),
-              listConversations(projectId, { limit: 20 }),
-              getCompanyMap(projectId),
-              listArtifacts(projectId),
-            ])
+          const globals = await ensureProjectGlobals()
 
-          if (
-            cancelled ||
-            requestedConversationId !== activeConversationIdRef.current
-          ) {
+          if (!isActiveRequest()) {
             return
           }
 
-          const draftWorkspace = createDraftWorkspace(
-            project,
-            companyMap,
-            artifactHub
+          setConversations(globals.conversations)
+          conversationsLoadedRef.current = true
+          queueConversationPreviewHydration(
+            globals.conversations,
+            requestedConversationId
           )
 
+          const draftWorkspace = buildDraftWorkspaceFromGlobals(globals)
+
           setWorkspace(draftWorkspace)
+          setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+          setLoadingWorkspaceSection(null)
           setMessages([])
           setMemoryPins([])
           setProblemCustomerDoc(draftWorkspace.problem_customer_doc)
-          const sorted = sortConversationsByRecent(conversationPage.items)
-          setConversations(sorted)
-          queueConversationPreviewHydration(sorted, requestedConversationId)
           hasBootstrappedRef.current = true
           return
         }
 
-        const [nextWorkspace, conversationPage] = await Promise.all([
-          getWorkspace(projectId, requestedConversationId),
-          listConversations(projectId, { limit: 20 }),
-        ])
+        const nextWorkspace = await loadConversationChatBootstrap(
+          projectPublicId,
+          requestedConversationId
+        )
 
-        if (
-          cancelled ||
-          requestedConversationId !== activeConversationIdRef.current
-        ) {
+        if (!isActiveRequest()) {
           return
         }
 
         hydrateWorkspace(nextWorkspace)
-        const sorted = sortConversationsByRecent(conversationPage.items)
-        setConversations(sorted)
-        queueConversationPreviewHydration(sorted, requestedConversationId)
         hasBootstrappedRef.current = true
+        setIsBootstrapping(false)
+        setIsConversationLoading(false)
+        refreshDeferredProjectData({ includeCapture: true })
       } catch (loadError) {
-        if (
-          !cancelled &&
-          requestedConversationId === activeConversationIdRef.current
-        ) {
+        if (isActiveRequest()) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -410,26 +629,213 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
           )
         }
       } finally {
-        if (
-          !cancelled &&
-          requestedConversationId === activeConversationIdRef.current
-        ) {
+        if (isActiveRequest()) {
           setIsBootstrapping(false)
           setIsConversationLoading(false)
         }
       }
     }
 
-    void loadWorkspace()
+    void measureWorkspaceTiming(
+      "chat bootstrap",
+      loadWorkspace,
+      cached ? `${requestedConversationId}:cache` : requestedConversationId
+    )
 
     return () => {
       cancelled = true
     }
   }, [
-    projectId,
     conversationId,
+    ensureProjectGlobals,
     hydrateWorkspace,
+    patchProjectGlobals,
+    projectPublicId,
     queueConversationPreviewHydration,
+    workspaceSection,
+  ])
+
+  useEffect(() => {
+    if (!isNonChatWorkspaceSection(workspaceSection)) {
+      return
+    }
+
+    if (workspace && hasWorkspaceSlice(workspaceSlices, workspaceSection)) {
+      return
+    }
+
+    let cancelled = false
+    const requestedSection = workspaceSection
+    const hasExistingWorkspace = workspace !== null
+
+    async function loadProjectWorkspace() {
+      if (hasExistingWorkspace) {
+        setLoadingWorkspaceSection(requestedSection)
+      } else {
+        setIsBootstrapping(true)
+      }
+
+      try {
+        const globals = await ensureProjectSectionGlobals(requestedSection)
+
+        if (cancelled) {
+          return
+        }
+
+        const draftWorkspace = buildDraftWorkspaceFromSectionGlobals(globals)
+
+        setWorkspace((current) =>
+          current
+            ? mergeSectionGlobalsIntoWorkspace(
+                current,
+                globals,
+                workspaceSlices
+              )
+            : draftWorkspace
+        )
+        setWorkspaceSlices((current) => ({
+          companyMap: current.companyMap || globals.slices.companyMap,
+          artifactHub: current.artifactHub || globals.slices.artifactHub,
+        }))
+        workspaceSlicesRef.current = {
+          companyMap:
+            workspaceSlicesRef.current.companyMap || globals.slices.companyMap,
+          artifactHub:
+            workspaceSlicesRef.current.artifactHub ||
+            globals.slices.artifactHub,
+        }
+        if (
+          workspaceSlicesRef.current.companyMap &&
+          workspaceSlicesRef.current.artifactHub
+        ) {
+          captureDataLoadedRef.current = true
+        }
+        setProblemCustomerDoc(
+          (current) => current ?? draftWorkspace.problem_customer_doc
+        )
+        setError(null)
+        hasBootstrappedRef.current = true
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Could not load project workspace."
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          if (!hasExistingWorkspace) {
+            setIsBootstrapping(false)
+          }
+          setLoadingWorkspaceSection((current) =>
+            current === requestedSection ? null : current
+          )
+        }
+      }
+    }
+
+    void measureWorkspaceTiming(
+      `${requestedSection} bootstrap`,
+      loadProjectWorkspace,
+      projectPublicId
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    ensureProjectSectionGlobals,
+    projectPublicId,
+    workspace,
+    workspaceSlices,
+    workspaceSection,
+  ])
+
+  useEffect(() => {
+    if (!isNonChatWorkspaceSection(workspaceSection)) {
+      return
+    }
+
+    if (conversationsLoadedRef.current) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadSidebarConversations() {
+      const sidebarData = await ensureProjectSidebarData()
+
+      if (cancelled) {
+        return
+      }
+
+      setConversations(sidebarData.conversations)
+      patchProjectGlobals({ conversationList: sidebarData.conversations })
+      conversationsLoadedRef.current = true
+      queueConversationPreviewHydration(
+        sidebarData.conversations,
+        conversationId
+      )
+    }
+
+    void loadSidebarConversations().catch(() => {
+      // Sidebar can stay empty if the deferred list refresh fails.
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    conversationId,
+    ensureProjectSidebarData,
+    patchProjectGlobals,
+    queueConversationPreviewHydration,
+    workspaceSection,
+  ])
+
+  useEffect(() => {
+    if (!workspace || !isNonChatWorkspaceSection(workspaceSection)) {
+      return
+    }
+
+    const counterpartSection: NonChatWorkspaceSection =
+      workspaceSection === "company-map" ? "artifacts" : "company-map"
+
+    if (hasWorkspaceSlice(workspaceSlices, counterpartSection)) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadCounterpartWorkspaceSlice() {
+      const globals = await ensureProjectSectionGlobals(counterpartSection)
+
+      if (cancelled) {
+        return
+      }
+
+      setWorkspace((current) =>
+        mergeSectionGlobalsIntoWorkspace(current, globals, workspaceSlices)
+      )
+      setWorkspaceSlices((current) => ({
+        companyMap: current.companyMap || globals.slices.companyMap,
+        artifactHub: current.artifactHub || globals.slices.artifactHub,
+      }))
+    }
+
+    void loadCounterpartWorkspaceSlice().catch(() => {
+      // The center panel can stay interactive without the counterpart slice.
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    ensureProjectSectionGlobals,
+    workspace,
+    workspaceSection,
+    workspaceSlices,
   ])
 
   const handleSelectConversation = useCallback(
@@ -440,12 +846,12 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
       startTransition(() => {
         router.replace(
-          `/projects/${projectId}/conversations/${nextConversationId}`,
+          conversationPath(username, projectSlug, nextConversationId),
           { scroll: false }
         )
       })
     },
-    [conversationId, projectId, router]
+    [conversationId, projectSlug, router, username]
   )
 
   const handleNewConversation = useCallback(() => {
@@ -457,27 +863,35 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       return
     }
 
-    router.replace(draftConversationPath(projectId), { scroll: false })
-  }, [conversationId, projectId, router])
+    router.replace(draftConversationPath(username, projectSlug), {
+      scroll: false,
+    })
+  }, [conversationId, projectSlug, router, username])
 
   const handleDeleteConversation = useCallback(
     async (targetConversationId: string) => {
       setError(null)
 
       try {
-        await deleteConversation(projectId, targetConversationId)
+        await deleteConversation(projectPublicId, targetConversationId)
+
+        deleteConversationWorkspaceCache(
+          conversationCacheRef.current,
+          targetConversationId
+        )
+        forgetConversationInProjectGlobals(targetConversationId)
 
         setConversationPreviews((current) => {
           const next = { ...current }
           delete next[targetConversationId]
           conversationPreviewsRef.current = next
-          persistConversationPreviews(projectId, next)
+          persistConversationPreviews(projectPublicId, next)
           return next
         })
 
         setConversations((current) => {
           const remaining = current.filter(
-            (item) => item.id !== targetConversationId
+            (item) => item.public_id !== targetConversationId
           )
 
           if (targetConversationId === activeConversationIdRef.current) {
@@ -486,8 +900,8 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             startTransition(() => {
               router.replace(
                 next
-                  ? conversationPath(projectId, next.id)
-                  : draftConversationPath(projectId),
+                  ? conversationPath(username, projectSlug, next.public_id)
+                  : draftConversationPath(username, projectSlug),
                 { scroll: false }
               )
             })
@@ -503,7 +917,13 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         )
       }
     },
-    [projectId, router]
+    [
+      forgetConversationInProjectGlobals,
+      projectPublicId,
+      projectSlug,
+      router,
+      username,
+    ]
   )
 
   const handleSend = useCallback(
@@ -514,15 +934,17 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setError(null)
 
         try {
-          const conversation = await createConversation(projectId)
-          sendConversationId = conversation.id
+          const conversation = await createConversation(projectPublicId)
+          sendConversationId = conversation.public_id
           skipConversationLoadRef.current = sendConversationId
           activeConversationIdRef.current = sendConversationId
 
           setConversations((current) =>
             sortConversationsByRecent([
               conversation,
-              ...current.filter((item) => item.id !== conversation.id),
+              ...current.filter(
+                (item) => item.public_id !== conversation.public_id
+              ),
             ])
           )
 
@@ -533,7 +955,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
                   conversation,
                   problem_customer_doc: {
                     ...current.problem_customer_doc,
-                    conversation_id: conversation.id,
+                    conversation_id: conversation.public_id,
                   },
                 }
               : current
@@ -543,14 +965,17 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             current
               ? {
                   ...current,
-                  conversation_id: conversation.id,
+                  conversation_id: conversation.public_id,
                 }
               : current
           )
 
-          router.replace(conversationPath(projectId, sendConversationId), {
-            scroll: false,
-          })
+          router.replace(
+            conversationPath(username, projectSlug, sendConversationId),
+            {
+              scroll: false,
+            }
+          )
         } catch (createError) {
           setError(
             createError instanceof Error
@@ -573,16 +998,16 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setMessages((current) => [
           ...current,
           {
-            id: optimisticUserId,
-            conversation_id: sendConversationId,
+            public_id: optimisticUserId,
+            conversation_public_id: sendConversationId,
             role: "user",
             content,
             sequence: current.length + 1,
             created_at: new Date().toISOString(),
           },
           {
-            id: optimisticAssistantId,
-            conversation_id: sendConversationId,
+            public_id: optimisticAssistantId,
+            conversation_public_id: sendConversationId,
             role: "assistant",
             content: "",
             sequence: current.length + 2,
@@ -593,7 +1018,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       })
 
       await sendChatMessage(
-        projectId,
+        projectPublicId,
         sendConversationId,
         content,
         {
@@ -608,7 +1033,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             setActivityLabel(null)
             setMessages((current) =>
               current.map((message) =>
-                message.id === optimisticAssistantId
+                message.public_id === optimisticAssistantId
                   ? {
                       ...message,
                       content: streamedContent,
@@ -637,17 +1062,21 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             }
 
             const streamedContent = assistantStreamRef.current
+            const nextPins = normalizeMemoryPins(payload.memory_pins)
 
-            setMessages((current) =>
-              current.map((message) => {
-                if (message.id === optimisticUserId) {
-                  return { ...message, id: payload.user_message_id }
-                }
-
-                if (message.id === optimisticAssistantId) {
+            setMessages((current) => {
+              const nextMessages = current.map((message) => {
+                if (message.public_id === optimisticUserId) {
                   return {
                     ...message,
-                    id: payload.assistant_message_id,
+                    public_id: payload.user_message_public_id,
+                  }
+                }
+
+                if (message.public_id === optimisticAssistantId) {
+                  return {
+                    ...message,
+                    public_id: payload.assistant_message_id,
                     content: streamedContent || message.content,
                     isStreaming: false,
                   }
@@ -655,20 +1084,56 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
 
                 return message
               })
-            )
+
+              allMessagesRef.current = nextMessages
+              patchConversationWorkspaceCache(
+                conversationCacheRef.current,
+                sendConversationId,
+                (cacheEntry) => ({
+                  ...cacheEntry,
+                  messages: nextMessages,
+                  workspace: {
+                    ...cacheEntry.workspace,
+                    messages: nextMessages,
+                  },
+                })
+              )
+
+              return nextMessages
+            })
             assistantStreamRef.current = ""
-            setMemoryPins(payload.memory_pins)
+            setMemoryPins(nextPins)
             setProblemCustomerDoc(payload.problem_customer_doc)
-            setWorkspace((current) =>
-              current
-                ? {
-                    ...current,
-                    company_map: payload.company_map,
-                    memory_pins: payload.memory_pins,
-                    problem_customer_doc: payload.problem_customer_doc,
-                  }
-                : current
-            )
+            patchProjectGlobals({ companyMap: payload.company_map })
+            setWorkspaceSlices((current) => ({
+              ...current,
+              companyMap: true,
+            }))
+            setWorkspace((current) => {
+              if (!current) {
+                return current
+              }
+
+              const nextWorkspace = {
+                ...current,
+                company_map: payload.company_map,
+                memory_pins: nextPins,
+                problem_customer_doc: payload.problem_customer_doc,
+              }
+
+              patchConversationWorkspaceCache(
+                conversationCacheRef.current,
+                sendConversationId,
+                (cacheEntry) => ({
+                  ...cacheEntry,
+                  workspace: nextWorkspace,
+                  memoryPins: nextPins,
+                  problemCustomerDoc: payload.problem_customer_doc,
+                })
+              )
+
+              return nextWorkspace
+            })
             setActivityLabel(null)
             setIsStreaming(false)
 
@@ -677,22 +1142,16 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
               truncatePreview(content)
             )
 
-            void listConversations(projectId, { limit: 20 })
-              .then((page) => {
-                const sorted = sortConversationsByRecent(page.items)
-                setConversations(sorted)
-                queueConversationPreviewHydration(sorted, sendConversationId)
+            void loadProjectSidebarData(projectPublicId)
+              .then((sidebarData) => {
+                setConversations(sidebarData.conversations)
+                patchProjectGlobals({
+                  conversationList: sidebarData.conversations,
+                })
+                conversationsLoadedRef.current = true
               })
               .catch(() => {
                 // Sidebar order can stay stale if list refresh fails.
-              })
-
-            void getWorkspace(projectId, sendConversationId)
-              .then((nextWorkspace) => {
-                hydrateWorkspace(nextWorkspace)
-              })
-              .catch(() => {
-                // Keep streamed content if workspace refresh fails.
               })
           },
           onError: (streamError) => {
@@ -705,7 +1164,9 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
             setActivityLabel(null)
             setIsStreaming(false)
             setMessages((current) =>
-              current.filter((message) => message.id !== optimisticAssistantId)
+              current.filter(
+                (message) => message.public_id !== optimisticAssistantId
+              )
             )
           },
         },
@@ -714,39 +1175,129 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     },
     [
       conversationId,
-      projectId,
-      hydrateWorkspace,
-      queueConversationPreviewHydration,
+      projectPublicId,
+      projectSlug,
+      username,
       rememberConversationPreview,
+      patchProjectGlobals,
       router,
     ]
   )
 
   const refreshCaptureState = useCallback(async () => {
-    const [nextPins, nextCompanyMap, nextArtifactHub] = await Promise.all([
-      listPins(projectId),
-      getCompanyMap(projectId),
-      listArtifacts(projectId),
-    ])
-    setMemoryPins(nextPins)
+    const captureData = await loadProjectCaptureData(projectPublicId)
+    setMemoryPins(captureData.memoryPins)
+    patchProjectGlobals({
+      companyMap: captureData.companyMap,
+      artifacts: captureData.artifactHub,
+    })
+    setWorkspaceSlices(FULL_WORKSPACE_SLICES)
     setWorkspace((current) =>
-      current
-        ? {
-            ...current,
-            memory_pins: nextPins,
-            company_map: nextCompanyMap,
-            artifact_hub: nextArtifactHub,
-          }
-        : current
+      current ? mergeCaptureDataIntoWorkspace(current, captureData) : current
     )
-  }, [projectId])
+    patchConversationWorkspaceCache(
+      conversationCacheRef.current,
+      activeConversationIdRef.current,
+      (cacheEntry) => ({
+        ...cacheEntry,
+        workspace: mergeCaptureDataIntoWorkspace(
+          cacheEntry.workspace,
+          captureData
+        ),
+        memoryPins: captureData.memoryPins,
+      })
+    )
+  }, [patchProjectGlobals, projectPublicId])
+
+  const handleIngestionConversationCreated = useCallback(
+    async (newConversationId: string) => {
+      skipConversationLoadRef.current = newConversationId
+      activeConversationIdRef.current = newConversationId
+
+      router.replace(
+        conversationPath(username, projectSlug, newConversationId),
+        {
+          scroll: false,
+        }
+      )
+
+      const nextWorkspace = await loadConversationChatBootstrap(
+        projectPublicId,
+        newConversationId
+      )
+      hydrateWorkspace(nextWorkspace)
+
+      setConversations((current) => {
+        const nextConversations = sortConversationsByRecent([
+          nextWorkspace.conversation,
+          ...current.filter((item) => item.public_id !== newConversationId),
+        ])
+
+        patchProjectGlobals({ conversationList: nextConversations })
+        return nextConversations
+      })
+    },
+    [
+      hydrateWorkspace,
+      patchProjectGlobals,
+      projectPublicId,
+      projectSlug,
+      router,
+      username,
+    ]
+  )
+
+  const handleIngestionApplySuccess = useCallback(
+    async (result: ApplyIngestionResponse) => {
+      setMemoryPins(result.memory_pins)
+      setProblemCustomerDoc(result.problem_customer_doc)
+      patchConversationWorkspaceCache(
+        conversationCacheRef.current,
+        activeConversationIdRef.current,
+        (cacheEntry) => ({
+          ...cacheEntry,
+          workspace: {
+            ...cacheEntry.workspace,
+            memory_pins: result.memory_pins,
+            problem_customer_doc: result.problem_customer_doc,
+          },
+          memoryPins: result.memory_pins,
+          problemCustomerDoc: result.problem_customer_doc,
+        })
+      )
+      setWorkspace((current) =>
+        current
+          ? {
+              ...current,
+              memory_pins: result.memory_pins,
+              problem_customer_doc: result.problem_customer_doc,
+            }
+          : current
+      )
+      await refreshCaptureState()
+      setIngestionDialogOpen(false)
+    },
+    [refreshCaptureState]
+  )
+
+  const ingestion = useIngestionFlow({
+    projectId: projectPublicId,
+    conversationId,
+    onConversationCreated: handleIngestionConversationCreated,
+    onApplySuccess: handleIngestionApplySuccess,
+    onActivityLabel: setActivityLabel,
+    onError: (message) => {
+      setError(message)
+      setIngestionDialogOpen(true)
+    },
+  })
 
   const handleConfirmPin = useCallback(
     async (pin: MemoryPinRead) => {
-      setPendingPinId(pin.id)
+      setPendingPinId(pin.public_id)
       setError(null)
       try {
-        await confirmPin(projectId, pin.id)
+        await confirmPin(projectPublicId, pin.public_id)
         await refreshCaptureState()
       } catch (actionError) {
         setError(
@@ -758,15 +1309,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingPinId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleEditPin = useCallback(
     async (pin: MemoryPinRead, content: string) => {
-      setPendingPinId(pin.id)
+      setPendingPinId(pin.public_id)
       setError(null)
       try {
-        await updatePin(projectId, pin.id, {
+        await updatePin(projectPublicId, pin.public_id, {
           content,
           payload: { ...pin.payload, content },
         })
@@ -782,15 +1333,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingPinId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleArchivePin = useCallback(
     async (pin: MemoryPinRead) => {
-      setPendingPinId(pin.id)
+      setPendingPinId(pin.public_id)
       setError(null)
       try {
-        await archivePin(projectId, pin.id)
+        await archivePin(projectPublicId, pin.public_id)
         await refreshCaptureState()
       } catch (actionError) {
         setError(
@@ -802,15 +1353,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingPinId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handlePromotePin = useCallback(
     async (pin: MemoryPinRead) => {
-      setPendingPinId(pin.id)
+      setPendingPinId(pin.public_id)
       setError(null)
       try {
-        await promotePin(projectId, pin.id)
+        await promotePin(projectPublicId, pin.public_id)
         await refreshCaptureState()
       } catch (actionError) {
         setError(
@@ -822,21 +1373,21 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingPinId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleAcceptCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await acceptCandidate(projectId, candidate.id)
+        await acceptCandidate(projectPublicId, candidate.public_id)
         setStaleCandidateId(null)
         await refreshCaptureState()
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
           await refreshCaptureState()
-          setStaleCandidateId(candidate.id)
+          setStaleCandidateId(candidate.public_id)
         }
         setError(
           actionError instanceof Error
@@ -847,15 +1398,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleReplaceCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead, expectedRevisionId: string) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await acceptCandidate(projectId, candidate.id, {
+        await acceptCandidate(projectPublicId, candidate.public_id, {
           allow_replace: true,
           expected_revision_id: expectedRevisionId,
         })
@@ -864,7 +1415,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
           await refreshCaptureState()
-          setStaleCandidateId(candidate.id)
+          setStaleCandidateId(candidate.public_id)
         }
         setError(
           actionError instanceof Error
@@ -875,21 +1426,21 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleEditAcceptCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead, value: string) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await editAcceptCandidate(projectId, candidate.id, value)
+        await editAcceptCandidate(projectPublicId, candidate.public_id, value)
         setStaleCandidateId(null)
         await refreshCaptureState()
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
           await refreshCaptureState()
-          setStaleCandidateId(candidate.id)
+          setStaleCandidateId(candidate.public_id)
         }
         setError(
           actionError instanceof Error
@@ -901,7 +1452,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleEditReplaceCandidate = useCallback(
@@ -910,10 +1461,10 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       value: string,
       expectedRevisionId: string
     ) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await editAcceptCandidate(projectId, candidate.id, value, {
+        await editAcceptCandidate(projectPublicId, candidate.public_id, value, {
           allow_replace: true,
           expected_revision_id: expectedRevisionId,
         })
@@ -922,7 +1473,7 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
       } catch (actionError) {
         if (actionError instanceof ApiError && actionError.status === 409) {
           await refreshCaptureState()
-          setStaleCandidateId(candidate.id)
+          setStaleCandidateId(candidate.public_id)
         }
         setError(
           actionError instanceof Error
@@ -934,15 +1485,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleRejectCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await rejectCandidate(projectId, candidate.id)
+        await rejectCandidate(projectPublicId, candidate.public_id)
         await refreshCaptureState()
       } catch (actionError) {
         setError(
@@ -954,15 +1505,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleArchiveCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await archiveCandidate(projectId, candidate.id)
+        await archiveCandidate(projectPublicId, candidate.public_id)
         await refreshCaptureState()
       } catch (actionError) {
         setError(
@@ -974,15 +1525,15 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const handleClarifyCandidate = useCallback(
     async (candidate: CompanyMapCandidateRead) => {
-      setPendingCandidateId(candidate.id)
+      setPendingCandidateId(candidate.public_id)
       setError(null)
       try {
-        await clarifyCandidate(projectId, candidate.id)
+        await clarifyCandidate(projectPublicId, candidate.public_id)
         await refreshCaptureState()
       } catch (actionError) {
         setError(
@@ -994,19 +1545,19 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         setPendingCandidateId(null)
       }
     },
-    [projectId, refreshCaptureState]
+    [projectPublicId, refreshCaptureState]
   )
 
   const conversationItems = useMemo(() => {
     return conversations.map((conversation) => {
-      const isActive = conversation.id === conversationId
+      const isActive = conversation.public_id === conversationId
       const activeFirstUser = isActive
         ? messages.find((message) => message.role === "user")
         : undefined
       const preview =
         activeFirstUser !== undefined
           ? truncatePreview(activeFirstUser.content)
-          : (conversationPreviews[conversation.id] ?? null)
+          : (conversationPreviews[conversation.public_id] ?? null)
 
       return { conversation, preview }
     })
@@ -1037,14 +1588,24 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     [handleApplyBranchMessageView]
   )
 
+  const handleNavigateToCheckpoint = useCallback(
+    (checkpoint: Checkpoint) => {
+      pendingCheckpointRestoreRef.current = checkpoint
+      branchViewCountRef.current = checkpoint.messageCount
+
+      if (checkpoint.conversationId === conversationId) {
+        handleApplyCheckpointSnapshot(checkpoint)
+        pendingCheckpointRestoreRef.current = null
+        return
+      }
+
+      handleSelectConversation(checkpoint.conversationId)
+    },
+    [conversationId, handleApplyCheckpointSnapshot, handleSelectConversation]
+  )
+
   if (isBootstrapping) {
-    return (
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_280px]">
-        <Skeleton className="hidden min-h-screen lg:block" />
-        <Skeleton className="min-h-screen" />
-        <Skeleton className="hidden min-h-screen lg:block" />
-      </div>
-    )
+    return <WorkspaceLayoutSkeleton />
   }
 
   if (error && !workspace) {
@@ -1058,29 +1619,44 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
     )
   }
 
-  if (!workspace || !problemCustomerDoc) {
-    return null
+  const activeProblemCustomerDoc =
+    problemCustomerDoc ?? workspace?.problem_customer_doc ?? null
+
+  if (!workspace || !activeProblemCustomerDoc) {
+    return <WorkspaceLayoutSkeleton />
   }
+
+  const navConversationId =
+    conversationId && !isDraftConversationId(conversationId)
+      ? conversationId
+      : (conversations[0]?.public_id ?? conversationId)
 
   return (
     <IdeaHistoryProvider
-      projectId={projectId}
-      conversationId={conversationId}
+      projectId={projectPublicId}
+      conversationId={navConversationId}
       pins={memoryPins}
-      doc={problemCustomerDoc}
+      doc={activeProblemCustomerDoc}
       messageCount={messages.length}
       onApplyBranchMessageView={handleApplyBranchMessageView}
       onApplyCheckpointSnapshot={handleApplyCheckpointSnapshot}
       onNavigateConversation={handleSelectConversation}
+      onNavigateToCheckpoint={handleNavigateToCheckpoint}
     >
       <WorkspaceShellLayout
+        username={username}
+        projectSlug={projectSlug}
+        workspaceSection={workspaceSection}
+        navConversationId={navConversationId}
         workspace={workspace}
+        workspaceSlices={workspaceSlices}
         conversationId={conversationId}
         conversationItems={conversationItems}
         messages={messages}
         memoryPins={memoryPins}
-        problemCustomerDoc={problemCustomerDoc}
+        problemCustomerDoc={activeProblemCustomerDoc}
         isConversationLoading={isConversationLoading}
+        loadingWorkspaceSection={loadingWorkspaceSection}
         isStreaming={isStreaming}
         activityLabel={activityLabel}
         error={error}
@@ -1115,19 +1691,75 @@ export function WorkspaceShell({ projectId }: WorkspaceShellProps) {
         }
         onExpandMobileContext={() => setMobileContextCollapsed(false)}
         onSidebarViewChange={setSidebarView}
+        onOpenIngestion={() => setIngestionDialogOpen(true)}
+        onImportFiles={async (files) => {
+          await ingestion.startFilesIngestion(files)
+        }}
+        isIngestionBusy={ingestion.isBusy}
+      />
+
+      <IngestionDialog
+        open={ingestionDialogOpen}
+        projectId={projectPublicId}
+        disabled={ingestion.isBusy}
+        error={ingestion.error}
+        onOpenChange={(open) => {
+          setIngestionDialogOpen(open)
+
+          if (!open && !ingestion.isBusy && ingestion.phase !== "preview") {
+            ingestion.reset()
+          }
+        }}
+        onUploadFiles={async (files) => {
+          setIngestionDialogOpen(false)
+          await ingestion.startFilesIngestion(files)
+        }}
+        onSubmitPaste={async (text, sourceType) => {
+          setIngestionDialogOpen(false)
+          await ingestion.startPasteIngestion(text, sourceType)
+        }}
+        onSelectExportConversation={async (transcript, provider, exportId) => {
+          setIngestionDialogOpen(false)
+          await ingestion.startExportIngestion(transcript, provider, exportId)
+        }}
+        onSubmitMemoryPaste={async (text) => {
+          setIngestionDialogOpen(false)
+          await ingestion.startPasteIngestion(text, "ai_memory_export")
+        }}
+      />
+
+      <IngestionPreviewDialog
+        open={ingestion.phase === "preview" || ingestion.phase === "applying"}
+        preview={ingestion.preview}
+        importCount={ingestion.importCount}
+        isApplying={ingestion.phase === "applying"}
+        error={ingestion.error}
+        onOpenChange={(open) => {
+          if (!open) {
+            ingestion.reset()
+          }
+        }}
+        onApply={ingestion.applyPreview}
+        onDiscard={() => ingestion.reset()}
       />
     </IdeaHistoryProvider>
   )
 }
 
 type WorkspaceShellLayoutProps = {
+  username: string
+  projectSlug: string
+  workspaceSection: ReturnType<typeof resolveProjectWorkspaceSection>
+  navConversationId: string
   workspace: WorkspaceRead
+  workspaceSlices: WorkspaceSliceState
   conversationId: string
   conversationItems: ConversationListItem[]
   messages: ChatMessage[]
   memoryPins: MemoryPinRead[]
   problemCustomerDoc: ProblemCustomerDocRead
   isConversationLoading: boolean
+  loadingWorkspaceSection: NonChatWorkspaceSection | null
   isStreaming: boolean
   activityLabel: string | null
   error: string | null
@@ -1178,16 +1810,40 @@ type WorkspaceShellLayoutProps = {
   onToggleMobileContext: () => void
   onExpandMobileContext: () => void
   onSidebarViewChange: (view: SidebarView) => void
+  onOpenIngestion: () => void
+  onImportFiles: (files: File[]) => void | Promise<void>
+  isIngestionBusy: boolean
+}
+
+function WorkspaceSectionLoading({ label }: { label: string }) {
+  return (
+    <section
+      className="bg-background flex min-h-0 flex-1 items-center justify-center px-4"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="text-muted-foreground flex items-center gap-2 text-sm">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <span>{label}</span>
+      </div>
+    </section>
+  )
 }
 
 function WorkspaceShellLayout({
+  username,
+  projectSlug,
+  workspaceSection,
+  navConversationId,
   workspace,
+  workspaceSlices,
   conversationId,
   conversationItems,
   messages,
   memoryPins,
   problemCustomerDoc,
   isConversationLoading,
+  loadingWorkspaceSection,
   isStreaming,
   activityLabel,
   error,
@@ -1220,6 +1876,9 @@ function WorkspaceShellLayout({
   onToggleMobileContext,
   onExpandMobileContext,
   onSidebarViewChange,
+  onOpenIngestion,
+  onImportFiles,
+  isIngestionBusy,
 }: WorkspaceShellLayoutProps) {
   const isDraftConversation = isDraftConversationId(conversationId)
   const {
@@ -1231,6 +1890,9 @@ function WorkspaceShellLayout({
     activeBinding,
     actionError,
     isActionPending,
+    isHistoryLoading,
+    historyError,
+    retryHistoryLoad,
     openOneOff,
     closeOneOff,
     sendOneOffQuestion,
@@ -1238,8 +1900,7 @@ function WorkspaceShellLayout({
     selectGraphNode,
     state,
   } = useIdeaHistory()
-  const [workspaceMode, setWorkspaceMode] =
-    useState<WorkspaceMode>("company-map")
+  const router = useRouter()
   const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(
     () => getFirstCompanyMapField(workspace)?.key ?? null
   )
@@ -1297,16 +1958,21 @@ function WorkspaceShellLayout({
   }
 
   function handleInspectPinSource() {
-    setWorkspaceMode("chat")
+    router.push(conversationPath(username, projectSlug, navConversationId))
   }
 
   function handleInspectCandidateSource() {
-    setWorkspaceMode("chat")
+    router.push(conversationPath(username, projectSlug, navConversationId))
   }
 
   function handleSelectPinField(field: CompanyMapFieldRead) {
     setSelectedFieldKey(field.key)
-    setWorkspaceMode("company-map")
+    router.push(companyMapPath(username, projectSlug))
+  }
+
+  function handleSelectGraphNode(node: GitGraphNode) {
+    router.push(conversationPath(username, projectSlug, navConversationId))
+    void selectGraphNode(node)
   }
 
   return (
@@ -1328,7 +1994,7 @@ function WorkspaceShellLayout({
           <CollapsibleSidebar side="left" collapsed={leftCollapsed}>
             <WorkspaceSidebar
               projectName={workspace.project.name}
-              activeConversationId={conversationId}
+              activeConversationId={navConversationId}
               conversationItems={conversationItems}
               view={sidebarView}
               onViewChange={onSidebarViewChange}
@@ -1339,8 +2005,11 @@ function WorkspaceShellLayout({
               graphConnections={graphConnections}
               graphLaneCount={graphLaneCount}
               activeCheckpointId={activeBinding?.lastCheckpointId ?? null}
-              onSelectGraphNode={selectGraphNode}
+              onSelectGraphNode={handleSelectGraphNode}
               getGraphNodeInsight={getNodeInsight}
+              isHistoryLoading={isHistoryLoading}
+              historyError={historyError}
+              onRetryHistory={retryHistoryLoad}
               collapsed={leftCollapsed}
               onToggleCollapse={onToggleLeftCollapse}
             />
@@ -1348,7 +2017,7 @@ function WorkspaceShellLayout({
         </div>
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
-          {isConversationLoading ? (
+          {isConversationLoading && workspaceSection === "chat" ? (
             <div className="bg-background/60 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-[1px]">
               <Loader2
                 className="text-muted-foreground size-5 animate-spin"
@@ -1358,49 +2027,70 @@ function WorkspaceShellLayout({
             </div>
           ) : null}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <WorkspaceModeBar
-              mode={workspaceMode}
-              onModeChange={setWorkspaceMode}
+            <ProjectWorkspaceNav
+              username={username}
+              projectSlug={projectSlug}
+              activeConversationId={navConversationId}
             />
-            {workspaceMode === "company-map" ? (
-              <CompanyMapPanel
-                companyMap={workspace.company_map}
-                selectedFieldKey={selectedField?.key ?? null}
-                pendingCandidateId={pendingCandidateId}
-                staleCandidateId={staleCandidateId}
-                onSelectField={(field) => {
-                  setSelectedFieldKey(field.key)
-                  setWorkspaceMode("company-map")
-                }}
-                onAcceptCandidate={onAcceptCandidate}
-                onReplaceCandidate={onReplaceCandidate}
-                onEditAcceptCandidate={onEditAcceptCandidate}
-                onEditReplaceCandidate={onEditReplaceCandidate}
-                onRejectCandidate={onRejectCandidate}
-                onArchiveCandidate={onArchiveCandidate}
-                onClarifyCandidate={onClarifyCandidate}
-                onInspectCandidateSource={handleInspectCandidateSource}
-              />
+            {workspaceSection === "company-map" ? (
+              workspaceSlices.companyMap ? (
+                <CompanyMapPanel
+                  companyMap={workspace.company_map}
+                  selectedFieldKey={selectedField?.key ?? null}
+                  pendingCandidateId={pendingCandidateId}
+                  staleCandidateId={staleCandidateId}
+                  onSelectField={(field) => {
+                    setSelectedFieldKey(field.key)
+                  }}
+                  onAcceptCandidate={onAcceptCandidate}
+                  onReplaceCandidate={onReplaceCandidate}
+                  onEditAcceptCandidate={onEditAcceptCandidate}
+                  onEditReplaceCandidate={onEditReplaceCandidate}
+                  onRejectCandidate={onRejectCandidate}
+                  onArchiveCandidate={onArchiveCandidate}
+                  onClarifyCandidate={onClarifyCandidate}
+                  onInspectCandidateSource={handleInspectCandidateSource}
+                />
+              ) : (
+                <WorkspaceSectionLoading
+                  label={
+                    loadingWorkspaceSection === "company-map"
+                      ? "Loading Company Map"
+                      : "Preparing Company Map"
+                  }
+                />
+              )
             ) : null}
-            {workspaceMode === "artifact-hub" ? (
-              <ArtifactHubPanel
-                artifactHub={workspace.artifact_hub}
-                selectedArtifactId={selectedArtifact?.id ?? null}
-                onSelectArtifact={(artifact) => {
-                  setSelectedArtifactId(artifact.id)
-                  setWorkspaceMode("artifact-hub")
-                }}
-              />
+            {workspaceSection === "artifacts" ? (
+              workspaceSlices.artifactHub ? (
+                <ArtifactHubPanel
+                  artifactHub={workspace.artifact_hub}
+                  selectedArtifactId={selectedArtifact?.id ?? null}
+                  onSelectArtifact={(artifact) => {
+                    setSelectedArtifactId(artifact.id)
+                  }}
+                />
+              ) : (
+                <WorkspaceSectionLoading
+                  label={
+                    loadingWorkspaceSection === "artifacts"
+                      ? "Loading Artifact Hub"
+                      : "Preparing Artifact Hub"
+                  }
+                />
+              )
             ) : null}
-            {workspaceMode === "chat" ? (
+            {workspaceSection === "chat" ? (
               <>
                 {!isDraftConversation ? <CheckpointToolbar /> : null}
                 <ChatPanel
                   messages={messages}
                   activityLabel={activityLabel}
-                  isStreaming={isStreaming}
+                  isStreaming={isStreaming || isIngestionBusy}
                   error={error}
                   onSend={onSend}
+                  onOpenIngestion={onOpenIngestion}
+                  onImportFiles={onImportFiles}
                   {...(!isDraftConversation
                     ? { onExploreSeparately: openOneOff }
                     : {})}
@@ -1507,53 +2197,5 @@ function WorkspaceShellLayout({
         </div>
       ) : null}
     </AppShell>
-  )
-}
-
-function WorkspaceModeBar({
-  mode,
-  onModeChange,
-}: {
-  mode: WorkspaceMode
-  onModeChange: (mode: WorkspaceMode) => void
-}) {
-  const items: {
-    mode: WorkspaceMode
-    label: string
-    icon: LucideIcon
-  }[] = [
-    { mode: "company-map", label: "Company Map", icon: Building2 },
-    { mode: "artifact-hub", label: "Artifact Hub", icon: FileStack },
-    { mode: "chat", label: "Chat", icon: MessageSquare },
-  ]
-
-  return (
-    <div className="border-border/70 bg-surface/70 shrink-0 border-b px-3 py-2">
-      <div
-        className="bg-muted/50 inline-flex max-w-full gap-1 rounded-lg p-1"
-        role="tablist"
-        aria-label="Workspace mode"
-      >
-        {items.map((item) => {
-          const Icon = item.icon
-          const selected = mode === item.mode
-          return (
-            <Button
-              key={item.mode}
-              type="button"
-              variant={selected ? "secondary" : "ghost"}
-              size="sm"
-              role="tab"
-              aria-selected={selected}
-              className="min-w-0 gap-1.5"
-              onClick={() => onModeChange(item.mode)}
-            >
-              <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{item.label}</span>
-            </Button>
-          )
-        })}
-      </div>
-    </div>
   )
 }

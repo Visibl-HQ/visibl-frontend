@@ -43,8 +43,8 @@ Blank line between events.
 
 ```json
 {
-  "assistant_message_id": "uuid",
-  "user_message_id": "uuid",
+  "assistant_message_id": "message-public-id",
+  "user_message_public_id": "message-public-id",
   "problem_customer_doc": {
     "id": "uuid",
     "conversation_id": "uuid",
@@ -55,12 +55,12 @@ Blank line between events.
   },
   "memory_pins": [
     {
-      "id": "uuid",
-      "conversation_id": "uuid",
+      "public_id": "opaque-token",
+      "conversation_public_id": "opaque-token",
       "pin_type": "metric",
       "payload": { "value": "10", "label": "Stores interviewed" },
       "is_archived": false,
-      "source_message_id": "uuid",
+      "source_message_public_id": "message-public-id",
       "created_at": "...",
       "updated_at": "..."
     }
@@ -73,7 +73,7 @@ Blank line between events.
 1. Replace sidebar doc state with `problem_customer_doc`
 2. Replace pins list with `memory_pins` (full list for conversation)
 3. Finalize assistant message in thread (concatenate prior `text_delta`s)
-4. Ensure user message is shown (optimistic UI OK; IDs confirmed here)
+4. Ensure user message is shown (optimistic UI OK; confirm `user_message_public_id` and `assistant_message_id` here)
 
 ## Fetch + ReadableStream example
 

@@ -12,15 +12,21 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { typography } from "@/config/tokens"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/features/auth/components/auth-provider"
 import { NewProjectDialog } from "@/features/projects/components/new-project-dialog"
 import { ProjectCard } from "@/features/projects/components/project-card"
 import { UserMenu } from "@/features/projects/components/user-menu"
 import { createProject, listProjects } from "@/lib/api/projects"
-import { draftConversationPath } from "@/features/workspace/lib/conversation-routing"
+import {
+  draftConversationPath,
+  projectPathFromProject,
+} from "@/lib/routing/paths"
+import { slugifyProjectName } from "@/lib/routing/slug"
 import type { ProjectSummaryRead } from "@/lib/api/types"
 
 export function ProjectsDashboard() {
   const router = useRouter()
+  const { user } = useAuth()
   const [projects, setProjects] = useState<ProjectSummaryRead[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -67,7 +73,15 @@ export function ProjectsDashboard() {
 
   async function handleCreateProject(name: string) {
     const project = await createProject({ name })
-    router.push(draftConversationPath(project.id))
+
+    if (!user) {
+      router.push(`/projects/${project.public_id}`)
+      return
+    }
+
+    router.push(
+      draftConversationPath(user.username, slugifyProjectName(project.name))
+    )
   }
 
   async function handleLoadMore() {
@@ -136,9 +150,13 @@ export function ProjectsDashboard() {
             <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {projects.map((project) => (
                 <ProjectCard
-                  key={project.id}
+                  key={project.public_id}
                   project={project}
-                  href={`/projects/${project.id}`}
+                  href={
+                    user
+                      ? projectPathFromProject(user.username, project)
+                      : `/projects/${project.public_id}`
+                  }
                 />
               ))}
             </div>

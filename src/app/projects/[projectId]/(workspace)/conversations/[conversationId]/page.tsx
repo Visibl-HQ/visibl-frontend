@@ -13,7 +13,7 @@ export async function generateMetadata({
   }
 }
 
-/** Conversation UI is rendered by the parent conversations layout shell. */
-export default function Page() {
+/** Conversation UI is rendered by the parent workspace layout shell. */
+export default function ConversationPage() {
   return null
 }
