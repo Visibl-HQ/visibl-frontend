@@ -52,6 +52,23 @@ export function createDraftConversation(projectId: string): ConversationRead {
   }
 }
 
+export function createEmptyCompanyMap(projectId: string): CompanyMapRead {
+  return {
+    project_public_id: projectId,
+    groups: [],
+    candidates: [],
+    reviewed_candidates: [],
+    capture_receipt: null,
+  }
+}
+
+export function createEmptyArtifactHub(projectId: string): ArtifactHubRead {
+  return {
+    project_public_id: projectId,
+    artifacts: [],
+  }
+}
+
 export function createDraftWorkspace(
   project: ProjectRead,
   companyMap: CompanyMapRead,

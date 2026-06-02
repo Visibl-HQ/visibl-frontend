@@ -54,6 +54,8 @@ import type {
 import type { GitGraphNode } from "@/features/workspace/data/demo-git-graph"
 import type { GraphConnection } from "@/features/idea-history/lib/graph-layout"
 import { isDraftConversationId } from "@/features/workspace/lib/conversation-routing"
+import { measureWorkspaceTiming } from "@/features/workspace/lib/workspace-timing"
+import { getOrCreateRequest } from "@/features/workspace/lib/workspace-request-cache"
 
 type IdeaHistoryContextValue = {
   state: ProjectHistoryState
@@ -207,7 +209,14 @@ export function IdeaHistoryProvider({
       setHistoryError(null)
 
       try {
-        const bootstrap = await ideaHistoryApi.fetchIdeaHistory(projectId)
+        const bootstrap = await measureWorkspaceTiming(
+          "idea history kickoff",
+          () =>
+            getOrCreateRequest(`idea-history:${projectId}`, () =>
+              ideaHistoryApi.fetchIdeaHistory(projectId)
+            ),
+          projectId
+        )
 
         if (!cancelled) {
           setState(adaptBootstrap(bootstrap))
@@ -235,7 +244,14 @@ export function IdeaHistoryProvider({
     setHistoryError(null)
 
     try {
-      const bootstrap = await ideaHistoryApi.fetchIdeaHistory(projectId)
+      const bootstrap = await measureWorkspaceTiming(
+        "idea history kickoff",
+        () =>
+          getOrCreateRequest(`idea-history:${projectId}`, () =>
+            ideaHistoryApi.fetchIdeaHistory(projectId)
+          ),
+        `${projectId}:retry`
+      )
       setState(adaptBootstrap(bootstrap))
     } catch (error) {
       setHistoryError(formatApiError(error, "Could not load idea history."))

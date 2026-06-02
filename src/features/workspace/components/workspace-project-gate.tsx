@@ -6,17 +6,27 @@ import Link from "next/link"
 import { resolveProjectBySlug } from "@/lib/api/projects"
 import { WorkspaceShell } from "@/features/workspace/components/workspace-shell"
 import { WorkspaceLayoutSkeleton } from "@/features/workspace/components/workspace-skeletons"
+import { getOrCreateRequest } from "@/features/workspace/lib/workspace-request-cache"
+import { measureWorkspaceTiming } from "@/features/workspace/lib/workspace-timing"
 
 type WorkspaceProjectGateProps = {
   username: string
   projectSlug: string
 }
 
+function slugCacheKey(username: string, projectSlug: string): string {
+  return `${username}/${projectSlug}`
+}
+
 export function WorkspaceProjectGate({
   username,
   projectSlug,
 }: WorkspaceProjectGateProps) {
-  const [projectPublicId, setProjectPublicId] = useState<string | null>(null)
+  const cacheKey = slugCacheKey(username, projectSlug)
+  const [projectPublicId, setProjectPublicId] = useState<string | null>(() => {
+    const cached = sessionStorage.getItem(`visibl:slug:${cacheKey}`)
+    return cached || null
+  })
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -26,9 +36,17 @@ export function WorkspaceProjectGate({
       setError(null)
 
       try {
-        const project = await resolveProjectBySlug(username, projectSlug)
+        const project = await measureWorkspaceTiming(
+          "slug resolve",
+          () =>
+            getOrCreateRequest(`slug:${cacheKey}`, () =>
+              resolveProjectBySlug(username, projectSlug)
+            ),
+          cacheKey
+        )
 
         if (!cancelled) {
+          sessionStorage.setItem(`visibl:slug:${cacheKey}`, project.public_id)
           setProjectPublicId(project.public_id)
         }
       } catch (resolveError) {
@@ -47,7 +65,7 @@ export function WorkspaceProjectGate({
     return () => {
       cancelled = true
     }
-  }, [projectSlug, username])
+  }, [cacheKey, projectSlug, username])
 
   if (error) {
     return (

@@ -26,11 +26,6 @@ import {
   createConversation,
   deleteConversation,
   editAcceptCandidate,
-  getCompanyMap,
-  getWorkspace,
-  listArtifacts,
-  listConversations,
-  listPins,
   promotePin,
   rejectCandidate,
   updatePin,
@@ -93,8 +88,23 @@ import {
 } from "@/features/workspace/lib/conversation-previews"
 import {
   buildDraftWorkspaceFromGlobals,
-  mergeConversationWithGlobals,
+  buildDraftWorkspaceFromSectionGlobals,
+  loadConversationChatBootstrap,
+  loadProjectCaptureData,
+  loadProjectSidebarData,
+  mergeCaptureDataIntoWorkspace,
+  type NonChatWorkspaceSection,
+  type ProjectSectionGlobals,
+  type WorkspaceSliceState,
 } from "@/features/workspace/lib/workspace-loader"
+import {
+  deleteConversationWorkspaceCache,
+  patchConversationWorkspaceCache,
+  readConversationWorkspaceCache,
+  writeConversationWorkspaceCache,
+  type ConversationWorkspaceCacheEntry,
+} from "@/features/workspace/lib/workspace-cache"
+import { measureWorkspaceTiming } from "@/features/workspace/lib/workspace-timing"
 import {
   companyMapPath,
   resolveProjectWorkspaceSection,
@@ -111,13 +121,16 @@ const LEFT_EXPANDED = 260
 const LEFT_COLLAPSED = 48
 const RIGHT_EXPANDED = 280
 const RIGHT_COLLAPSED = 48
-
-type ConversationCacheEntry = {
-  workspace: WorkspaceRead
-  messages: ChatMessage[]
-  memoryPins: MemoryPinRead[]
-  problemCustomerDoc: ProblemCustomerDocRead
+const EMPTY_WORKSPACE_SLICES: WorkspaceSliceState = {
+  companyMap: false,
+  artifactHub: false,
 }
+const FULL_WORKSPACE_SLICES: WorkspaceSliceState = {
+  companyMap: true,
+  artifactHub: true,
+}
+
+type ConversationCacheEntry = ConversationWorkspaceCacheEntry<ChatMessage>
 
 type WorkspaceShellProps = {
   projectPublicId: string
@@ -173,6 +186,42 @@ function sliceMessagesForBranchView(
   return messages.slice(0, messageCount)
 }
 
+function isNonChatWorkspaceSection(
+  section: ReturnType<typeof resolveProjectWorkspaceSection>
+): section is NonChatWorkspaceSection {
+  return section === "company-map" || section === "artifacts"
+}
+
+function hasWorkspaceSlice(
+  slices: WorkspaceSliceState,
+  section: NonChatWorkspaceSection
+): boolean {
+  return section === "company-map" ? slices.companyMap : slices.artifactHub
+}
+
+function mergeSectionGlobalsIntoWorkspace(
+  current: WorkspaceRead | null,
+  globals: ProjectSectionGlobals,
+  currentSlices: WorkspaceSliceState
+): WorkspaceRead {
+  if (!current) {
+    return buildDraftWorkspaceFromSectionGlobals(globals)
+  }
+
+  return {
+    ...current,
+    project: globals.project,
+    company_map:
+      globals.slices.companyMap || !currentSlices.companyMap
+        ? globals.companyMap
+        : current.company_map,
+    artifact_hub:
+      globals.slices.artifactHub || !currentSlices.artifactHub
+        ? globals.artifactHub
+        : current.artifact_hub,
+  }
+}
+
 export function WorkspaceShell({
   projectPublicId,
   username,
@@ -189,6 +238,8 @@ export function WorkspaceShell({
   const conversationId = params.conversationId ?? ""
   const hasBootstrappedRef = useRef(false)
   const conversationsLoadedRef = useRef(false)
+  const captureDataLoadedRef = useRef(false)
+  const workspaceSlicesRef = useRef<WorkspaceSliceState>(EMPTY_WORKSPACE_SLICES)
   const activeConversationIdRef = useRef(conversationId)
   const conversationCacheRef = useRef<Map<string, ConversationCacheEntry>>(
     new Map()
@@ -203,6 +254,11 @@ export function WorkspaceShell({
   const [, startTransition] = useTransition()
 
   const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null)
+  const [workspaceSlices, setWorkspaceSlices] = useState<WorkspaceSliceState>(
+    EMPTY_WORKSPACE_SLICES
+  )
+  const [loadingWorkspaceSection, setLoadingWorkspaceSection] =
+    useState<NonChatWorkspaceSection | null>(null)
   const [conversations, setConversations] = useState<ConversationRead[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [conversationPreviews, setConversationPreviews] = useState<
@@ -228,6 +284,10 @@ export function WorkspaceShell({
   const [ingestionDialogOpen, setIngestionDialogOpen] = useState(false)
 
   useEffect(() => {
+    workspaceSlicesRef.current = workspaceSlices
+  }, [workspaceSlices])
+
+  useEffect(() => {
     conversationPreviewsRef.current = conversationPreviews
   }, [conversationPreviews])
 
@@ -251,7 +311,13 @@ export function WorkspaceShell({
     () => conversationPreviewsRef.current,
     []
   )
-  const { ensureProjectGlobals } = useProjectGlobals(projectPublicId)
+  const {
+    ensureProjectGlobals,
+    ensureProjectSidebarData,
+    ensureProjectSectionGlobals,
+    patchProjectGlobals,
+    forgetConversationInProjectGlobals,
+  } = useProjectGlobals(projectPublicId)
   const { queueConversationPreviewHydration, abortPreviewHydration } =
     useConversationPreviewHydration({
       projectPublicId,
@@ -288,6 +354,10 @@ export function WorkspaceShell({
       allMessagesRef.current = fullMessages
 
       setWorkspace(nextWorkspace)
+      setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+      workspaceSlicesRef.current = FULL_WORKSPACE_SLICES
+      captureDataLoadedRef.current = true
+      setLoadingWorkspaceSection(null)
       setMessages((current) => {
         const limit = branchViewCountRef.current
 
@@ -303,13 +373,31 @@ export function WorkspaceShell({
       })
       setMemoryPins(nextWorkspace.memory_pins)
       setProblemCustomerDoc(nextWorkspace.problem_customer_doc)
+      setConversations((current) => {
+        if (
+          current.some(
+            (conversation) => conversation.public_id === workspaceConversationId
+          )
+        ) {
+          return current
+        }
 
-      conversationCacheRef.current.set(workspaceConversationId, {
-        workspace: nextWorkspace,
-        messages: fullMessages,
-        memoryPins: nextWorkspace.memory_pins,
-        problemCustomerDoc: nextWorkspace.problem_customer_doc,
+        return sortConversationsByRecent([
+          nextWorkspace.conversation,
+          ...current,
+        ])
       })
+
+      writeConversationWorkspaceCache(
+        conversationCacheRef.current,
+        workspaceConversationId,
+        {
+          workspace: nextWorkspace,
+          messages: fullMessages,
+          memoryPins: nextWorkspace.memory_pins,
+          problemCustomerDoc: nextWorkspace.problem_customer_doc,
+        }
+      )
 
       const pendingRestore = pendingCheckpointRestoreRef.current
 
@@ -329,15 +417,19 @@ export function WorkspaceShell({
           ...pendingRestore.docSnapshot,
           checklist: { ...pendingRestore.docSnapshot.checklist },
         })
-        conversationCacheRef.current.set(workspaceConversationId, {
-          workspace: nextWorkspace,
-          messages: restoredMessages,
-          memoryPins: pendingRestore.pinsSnapshot.map((pin) => ({ ...pin })),
-          problemCustomerDoc: {
-            ...pendingRestore.docSnapshot,
-            checklist: { ...pendingRestore.docSnapshot.checklist },
-          },
-        })
+        writeConversationWorkspaceCache(
+          conversationCacheRef.current,
+          workspaceConversationId,
+          {
+            workspace: nextWorkspace,
+            messages: restoredMessages,
+            memoryPins: pendingRestore.pinsSnapshot.map((pin) => ({ ...pin })),
+            problemCustomerDoc: {
+              ...pendingRestore.docSnapshot,
+              checklist: { ...pendingRestore.docSnapshot.checklist },
+            },
+          }
+        )
       }
 
       const preview = extractConversationPreview(nextWorkspace)
@@ -358,28 +450,80 @@ export function WorkspaceShell({
     const requestedConversationId = conversationId
     const isDraft = isDraftConversationId(requestedConversationId)
     const isFirstLoad = !hasBootstrappedRef.current
-    const cached = conversationCacheRef.current.get(requestedConversationId)
+    const cached = readConversationWorkspaceCache(
+      conversationCacheRef.current,
+      requestedConversationId
+    )
+    const isActiveRequest = () =>
+      !cancelled && requestedConversationId === activeConversationIdRef.current
 
     async function refreshConversationList() {
       if (conversationsLoadedRef.current) {
         return
       }
 
-      const globals = await ensureProjectGlobals()
+      const sidebarData = await loadProjectSidebarData(projectPublicId)
 
-      if (
-        cancelled ||
-        requestedConversationId !== activeConversationIdRef.current
-      ) {
+      if (!isActiveRequest()) {
         return
       }
 
-      setConversations(globals.conversations)
+      setConversations(sidebarData.conversations)
+      patchProjectGlobals({ conversationList: sidebarData.conversations })
       conversationsLoadedRef.current = true
       queueConversationPreviewHydration(
-        globals.conversations,
+        sidebarData.conversations,
         requestedConversationId
       )
+    }
+
+    async function refreshCaptureData() {
+      if (captureDataLoadedRef.current) {
+        return
+      }
+
+      const captureData = await loadProjectCaptureData(projectPublicId)
+
+      if (!isActiveRequest()) {
+        return
+      }
+
+      setMemoryPins(captureData.memoryPins)
+      patchProjectGlobals({
+        companyMap: captureData.companyMap,
+        artifacts: captureData.artifactHub,
+      })
+      setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+      setWorkspace((current) =>
+        current ? mergeCaptureDataIntoWorkspace(current, captureData) : current
+      )
+      patchConversationWorkspaceCache(
+        conversationCacheRef.current,
+        requestedConversationId,
+        (cacheEntry) => ({
+          ...cacheEntry,
+          workspace: mergeCaptureDataIntoWorkspace(
+            cacheEntry.workspace,
+            captureData
+          ),
+          memoryPins: captureData.memoryPins,
+        })
+      )
+      captureDataLoadedRef.current = true
+    }
+
+    function refreshDeferredProjectData(options?: {
+      includeCapture?: boolean
+    }) {
+      void refreshConversationList().catch(() => {
+        // Sidebar can stay sparse if the deferred list refresh fails.
+      })
+
+      if (options?.includeCapture) {
+        void refreshCaptureData().catch(() => {
+          // The bootstrap workspace already has capture data.
+        })
+      }
     }
 
     async function loadWorkspace() {
@@ -395,28 +539,11 @@ export function WorkspaceShell({
       ) {
         skipConversationLoadRef.current = null
 
-        try {
-          await refreshConversationList()
+        if (isActiveRequest()) {
           hasBootstrappedRef.current = true
-        } catch (loadError) {
-          if (
-            !cancelled &&
-            requestedConversationId === activeConversationIdRef.current
-          ) {
-            setError(
-              loadError instanceof Error
-                ? loadError.message
-                : "Could not load conversations."
-            )
-          }
-        } finally {
-          if (
-            !cancelled &&
-            requestedConversationId === activeConversationIdRef.current
-          ) {
-            setIsBootstrapping(false)
-            setIsConversationLoading(false)
-          }
+          setIsBootstrapping(false)
+          setIsConversationLoading(false)
+          refreshDeferredProjectData({ includeCapture: true })
         }
 
         return
@@ -424,6 +551,8 @@ export function WorkspaceShell({
 
       if (cached && !isDraft) {
         setWorkspace(cached.workspace)
+        setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+        setLoadingWorkspaceSection(null)
         setMessages(cached.messages)
         setMemoryPins(cached.memoryPins)
         setProblemCustomerDoc(cached.problemCustomerDoc)
@@ -435,23 +564,7 @@ export function WorkspaceShell({
         setIsBootstrapping(false)
         setIsConversationLoading(false)
 
-        void ensureProjectGlobals()
-          .then((globals) =>
-            getWorkspace(projectPublicId, requestedConversationId).then(
-              (bundle) => mergeConversationWithGlobals(bundle, globals)
-            )
-          )
-          .then((nextWorkspace) => {
-            if (
-              !cancelled &&
-              requestedConversationId === activeConversationIdRef.current
-            ) {
-              hydrateWorkspace(nextWorkspace)
-            }
-          })
-          .catch(() => {
-            // Keep cached conversation if refresh fails.
-          })
+        refreshDeferredProjectData()
 
         return
       }
@@ -467,26 +580,25 @@ export function WorkspaceShell({
       }
 
       try {
-        const globals = await ensureProjectGlobals()
-
-        if (
-          cancelled ||
-          requestedConversationId !== activeConversationIdRef.current
-        ) {
-          return
-        }
-
-        setConversations(globals.conversations)
-        conversationsLoadedRef.current = true
-        queueConversationPreviewHydration(
-          globals.conversations,
-          requestedConversationId
-        )
-
         if (isDraft) {
+          const globals = await ensureProjectGlobals()
+
+          if (!isActiveRequest()) {
+            return
+          }
+
+          setConversations(globals.conversations)
+          conversationsLoadedRef.current = true
+          queueConversationPreviewHydration(
+            globals.conversations,
+            requestedConversationId
+          )
+
           const draftWorkspace = buildDraftWorkspaceFromGlobals(globals)
 
           setWorkspace(draftWorkspace)
+          setWorkspaceSlices(FULL_WORKSPACE_SLICES)
+          setLoadingWorkspaceSection(null)
           setMessages([])
           setMemoryPins([])
           setProblemCustomerDoc(draftWorkspace.problem_customer_doc)
@@ -494,25 +606,22 @@ export function WorkspaceShell({
           return
         }
 
-        const bundle = await getWorkspace(
+        const nextWorkspace = await loadConversationChatBootstrap(
           projectPublicId,
           requestedConversationId
         )
 
-        if (
-          cancelled ||
-          requestedConversationId !== activeConversationIdRef.current
-        ) {
+        if (!isActiveRequest()) {
           return
         }
 
-        hydrateWorkspace(mergeConversationWithGlobals(bundle, globals))
+        hydrateWorkspace(nextWorkspace)
         hasBootstrappedRef.current = true
+        setIsBootstrapping(false)
+        setIsConversationLoading(false)
+        refreshDeferredProjectData({ includeCapture: true })
       } catch (loadError) {
-        if (
-          !cancelled &&
-          requestedConversationId === activeConversationIdRef.current
-        ) {
+        if (isActiveRequest()) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -520,17 +629,18 @@ export function WorkspaceShell({
           )
         }
       } finally {
-        if (
-          !cancelled &&
-          requestedConversationId === activeConversationIdRef.current
-        ) {
+        if (isActiveRequest()) {
           setIsBootstrapping(false)
           setIsConversationLoading(false)
         }
       }
     }
 
-    void loadWorkspace()
+    void measureWorkspaceTiming(
+      "chat bootstrap",
+      loadWorkspace,
+      cached ? `${requestedConversationId}:cache` : requestedConversationId
+    )
 
     return () => {
       cancelled = true
@@ -539,39 +649,70 @@ export function WorkspaceShell({
     conversationId,
     ensureProjectGlobals,
     hydrateWorkspace,
+    patchProjectGlobals,
     projectPublicId,
     queueConversationPreviewHydration,
     workspaceSection,
   ])
 
   useEffect(() => {
-    if (workspaceSection === "chat" && (conversationId || isBootstrapping)) {
+    if (!isNonChatWorkspaceSection(workspaceSection)) {
       return
     }
 
-    if (workspace) {
+    if (workspace && hasWorkspaceSlice(workspaceSlices, workspaceSection)) {
       return
     }
 
     let cancelled = false
+    const requestedSection = workspaceSection
+    const hasExistingWorkspace = workspace !== null
 
     async function loadProjectWorkspace() {
-      setIsBootstrapping(true)
+      if (hasExistingWorkspace) {
+        setLoadingWorkspaceSection(requestedSection)
+      } else {
+        setIsBootstrapping(true)
+      }
 
       try {
-        const globals = await ensureProjectGlobals()
+        const globals = await ensureProjectSectionGlobals(requestedSection)
 
         if (cancelled) {
           return
         }
 
-        const draftWorkspace = buildDraftWorkspaceFromGlobals(globals)
+        const draftWorkspace = buildDraftWorkspaceFromSectionGlobals(globals)
 
-        setWorkspace(draftWorkspace)
-        setProblemCustomerDoc(draftWorkspace.problem_customer_doc)
-        setMemoryPins([])
-        setConversations(globals.conversations)
-        conversationsLoadedRef.current = true
+        setWorkspace((current) =>
+          current
+            ? mergeSectionGlobalsIntoWorkspace(
+                current,
+                globals,
+                workspaceSlices
+              )
+            : draftWorkspace
+        )
+        setWorkspaceSlices((current) => ({
+          companyMap: current.companyMap || globals.slices.companyMap,
+          artifactHub: current.artifactHub || globals.slices.artifactHub,
+        }))
+        workspaceSlicesRef.current = {
+          companyMap:
+            workspaceSlicesRef.current.companyMap || globals.slices.companyMap,
+          artifactHub:
+            workspaceSlicesRef.current.artifactHub || globals.slices.artifactHub,
+        }
+        if (
+          workspaceSlicesRef.current.companyMap &&
+          workspaceSlicesRef.current.artifactHub
+        ) {
+          captureDataLoadedRef.current = true
+        }
+        setProblemCustomerDoc(
+          (current) => current ?? draftWorkspace.problem_customer_doc
+        )
+        setError(null)
         hasBootstrappedRef.current = true
       } catch (loadError) {
         if (!cancelled) {
@@ -583,22 +724,117 @@ export function WorkspaceShell({
         }
       } finally {
         if (!cancelled) {
-          setIsBootstrapping(false)
+          if (!hasExistingWorkspace) {
+            setIsBootstrapping(false)
+          }
+          setLoadingWorkspaceSection((current) =>
+            current === requestedSection ? null : current
+          )
         }
       }
     }
 
-    void loadProjectWorkspace()
+    void measureWorkspaceTiming(
+      `${requestedSection} bootstrap`,
+      loadProjectWorkspace,
+      projectPublicId
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    ensureProjectSectionGlobals,
+    projectPublicId,
+    workspace,
+    workspaceSlices,
+    workspaceSection,
+  ])
+
+  useEffect(() => {
+    if (!isNonChatWorkspaceSection(workspaceSection)) {
+      return
+    }
+
+    if (conversationsLoadedRef.current) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadSidebarConversations() {
+      const sidebarData = await ensureProjectSidebarData()
+
+      if (cancelled) {
+        return
+      }
+
+      setConversations(sidebarData.conversations)
+      patchProjectGlobals({ conversationList: sidebarData.conversations })
+      conversationsLoadedRef.current = true
+      queueConversationPreviewHydration(
+        sidebarData.conversations,
+        conversationId
+      )
+    }
+
+    void loadSidebarConversations().catch(() => {
+      // Sidebar can stay empty if the deferred list refresh fails.
+    })
 
     return () => {
       cancelled = true
     }
   }, [
     conversationId,
-    ensureProjectGlobals,
-    isBootstrapping,
+    ensureProjectSidebarData,
+    patchProjectGlobals,
+    queueConversationPreviewHydration,
+    workspaceSection,
+  ])
+
+  useEffect(() => {
+    if (!workspace || !isNonChatWorkspaceSection(workspaceSection)) {
+      return
+    }
+
+    const counterpartSection: NonChatWorkspaceSection =
+      workspaceSection === "company-map" ? "artifacts" : "company-map"
+
+    if (hasWorkspaceSlice(workspaceSlices, counterpartSection)) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadCounterpartWorkspaceSlice() {
+      const globals = await ensureProjectSectionGlobals(counterpartSection)
+
+      if (cancelled) {
+        return
+      }
+
+      setWorkspace((current) =>
+        mergeSectionGlobalsIntoWorkspace(current, globals, workspaceSlices)
+      )
+      setWorkspaceSlices((current) => ({
+        companyMap: current.companyMap || globals.slices.companyMap,
+        artifactHub: current.artifactHub || globals.slices.artifactHub,
+      }))
+    }
+
+    void loadCounterpartWorkspaceSlice().catch(() => {
+      // The center panel can stay interactive without the counterpart slice.
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    ensureProjectSectionGlobals,
     workspace,
     workspaceSection,
+    workspaceSlices,
   ])
 
   const handleSelectConversation = useCallback(
@@ -638,6 +874,12 @@ export function WorkspaceShell({
       try {
         await deleteConversation(projectPublicId, targetConversationId)
 
+        deleteConversationWorkspaceCache(
+          conversationCacheRef.current,
+          targetConversationId
+        )
+        forgetConversationInProjectGlobals(targetConversationId)
+
         setConversationPreviews((current) => {
           const next = { ...current }
           delete next[targetConversationId]
@@ -674,7 +916,13 @@ export function WorkspaceShell({
         )
       }
     },
-    [projectPublicId, projectSlug, router, username]
+    [
+      forgetConversationInProjectGlobals,
+      projectPublicId,
+      projectSlug,
+      router,
+      username,
+    ]
   )
 
   const handleSend = useCallback(
@@ -813,9 +1061,10 @@ export function WorkspaceShell({
             }
 
             const streamedContent = assistantStreamRef.current
+            const nextPins = normalizeMemoryPins(payload.memory_pins)
 
-            setMessages((current) =>
-              current.map((message) => {
+            setMessages((current) => {
+              const nextMessages = current.map((message) => {
                 if (message.public_id === optimisticUserId) {
                   return {
                     ...message,
@@ -834,20 +1083,56 @@ export function WorkspaceShell({
 
                 return message
               })
-            )
+
+              allMessagesRef.current = nextMessages
+              patchConversationWorkspaceCache(
+                conversationCacheRef.current,
+                sendConversationId,
+                (cacheEntry) => ({
+                  ...cacheEntry,
+                  messages: nextMessages,
+                  workspace: {
+                    ...cacheEntry.workspace,
+                    messages: nextMessages,
+                  },
+                })
+              )
+
+              return nextMessages
+            })
             assistantStreamRef.current = ""
-            setMemoryPins(normalizeMemoryPins(payload.memory_pins))
+            setMemoryPins(nextPins)
             setProblemCustomerDoc(payload.problem_customer_doc)
-            setWorkspace((current) =>
-              current
-                ? {
-                    ...current,
-                    company_map: payload.company_map,
-                    memory_pins: payload.memory_pins,
-                    problem_customer_doc: payload.problem_customer_doc,
-                  }
-                : current
-            )
+            patchProjectGlobals({ companyMap: payload.company_map })
+            setWorkspaceSlices((current) => ({
+              ...current,
+              companyMap: true,
+            }))
+            setWorkspace((current) => {
+              if (!current) {
+                return current
+              }
+
+              const nextWorkspace = {
+                ...current,
+                company_map: payload.company_map,
+                memory_pins: nextPins,
+                problem_customer_doc: payload.problem_customer_doc,
+              }
+
+              patchConversationWorkspaceCache(
+                conversationCacheRef.current,
+                sendConversationId,
+                (cacheEntry) => ({
+                  ...cacheEntry,
+                  workspace: nextWorkspace,
+                  memoryPins: nextPins,
+                  problemCustomerDoc: payload.problem_customer_doc,
+                })
+              )
+
+              return nextWorkspace
+            })
             setActivityLabel(null)
             setIsStreaming(false)
 
@@ -856,10 +1141,12 @@ export function WorkspaceShell({
               truncatePreview(content)
             )
 
-            void listConversations(projectPublicId, { limit: 20 })
-              .then((page) => {
-                const sorted = sortConversationsByRecent(page.items)
-                setConversations(sorted)
+            void loadProjectSidebarData(projectPublicId)
+              .then((sidebarData) => {
+                setConversations(sidebarData.conversations)
+                patchProjectGlobals({
+                  conversationList: sidebarData.conversations,
+                })
                 conversationsLoadedRef.current = true
               })
               .catch(() => {
@@ -891,28 +1178,35 @@ export function WorkspaceShell({
       projectSlug,
       username,
       rememberConversationPreview,
+      patchProjectGlobals,
       router,
     ]
   )
 
   const refreshCaptureState = useCallback(async () => {
-    const [nextPins, nextCompanyMap, nextArtifactHub] = await Promise.all([
-      listPins(projectPublicId),
-      getCompanyMap(projectPublicId),
-      listArtifacts(projectPublicId),
-    ])
-    setMemoryPins(nextPins)
+    const captureData = await loadProjectCaptureData(projectPublicId)
+    setMemoryPins(captureData.memoryPins)
+    patchProjectGlobals({
+      companyMap: captureData.companyMap,
+      artifacts: captureData.artifactHub,
+    })
+    setWorkspaceSlices(FULL_WORKSPACE_SLICES)
     setWorkspace((current) =>
-      current
-        ? {
-            ...current,
-            memory_pins: nextPins,
-            company_map: nextCompanyMap,
-            artifact_hub: nextArtifactHub,
-          }
-        : current
+      current ? mergeCaptureDataIntoWorkspace(current, captureData) : current
     )
-  }, [projectPublicId])
+    patchConversationWorkspaceCache(
+      conversationCacheRef.current,
+      activeConversationIdRef.current,
+      (cacheEntry) => ({
+        ...cacheEntry,
+        workspace: mergeCaptureDataIntoWorkspace(
+          cacheEntry.workspace,
+          captureData
+        ),
+        memoryPins: captureData.memoryPins,
+      })
+    )
+  }, [patchProjectGlobals, projectPublicId])
 
   const handleIngestionConversationCreated = useCallback(
     async (newConversationId: string) => {
@@ -926,26 +1220,50 @@ export function WorkspaceShell({
         }
       )
 
-      const nextWorkspace = await getWorkspace(
+      const nextWorkspace = await loadConversationChatBootstrap(
         projectPublicId,
         newConversationId
       )
       hydrateWorkspace(nextWorkspace)
 
-      setConversations((current) =>
-        sortConversationsByRecent([
+      setConversations((current) => {
+        const nextConversations = sortConversationsByRecent([
           nextWorkspace.conversation,
           ...current.filter((item) => item.public_id !== newConversationId),
         ])
-      )
+
+        patchProjectGlobals({ conversationList: nextConversations })
+        return nextConversations
+      })
     },
-    [hydrateWorkspace, projectPublicId, projectSlug, router, username]
+    [
+      hydrateWorkspace,
+      patchProjectGlobals,
+      projectPublicId,
+      projectSlug,
+      router,
+      username,
+    ]
   )
 
   const handleIngestionApplySuccess = useCallback(
     async (result: ApplyIngestionResponse) => {
       setMemoryPins(result.memory_pins)
       setProblemCustomerDoc(result.problem_customer_doc)
+      patchConversationWorkspaceCache(
+        conversationCacheRef.current,
+        activeConversationIdRef.current,
+        (cacheEntry) => ({
+          ...cacheEntry,
+          workspace: {
+            ...cacheEntry.workspace,
+            memory_pins: result.memory_pins,
+            problem_customer_doc: result.problem_customer_doc,
+          },
+          memoryPins: result.memory_pins,
+          problemCustomerDoc: result.problem_customer_doc,
+        })
+      )
       setWorkspace((current) =>
         current
           ? {
@@ -1330,12 +1648,14 @@ export function WorkspaceShell({
         workspaceSection={workspaceSection}
         navConversationId={navConversationId}
         workspace={workspace}
+        workspaceSlices={workspaceSlices}
         conversationId={conversationId}
         conversationItems={conversationItems}
         messages={messages}
         memoryPins={memoryPins}
         problemCustomerDoc={activeProblemCustomerDoc}
         isConversationLoading={isConversationLoading}
+        loadingWorkspaceSection={loadingWorkspaceSection}
         isStreaming={isStreaming}
         activityLabel={activityLabel}
         error={error}
@@ -1431,12 +1751,14 @@ type WorkspaceShellLayoutProps = {
   workspaceSection: ReturnType<typeof resolveProjectWorkspaceSection>
   navConversationId: string
   workspace: WorkspaceRead
+  workspaceSlices: WorkspaceSliceState
   conversationId: string
   conversationItems: ConversationListItem[]
   messages: ChatMessage[]
   memoryPins: MemoryPinRead[]
   problemCustomerDoc: ProblemCustomerDocRead
   isConversationLoading: boolean
+  loadingWorkspaceSection: NonChatWorkspaceSection | null
   isStreaming: boolean
   activityLabel: string | null
   error: string | null
@@ -1492,18 +1814,35 @@ type WorkspaceShellLayoutProps = {
   isIngestionBusy: boolean
 }
 
+function WorkspaceSectionLoading({ label }: { label: string }) {
+  return (
+    <section
+      className="bg-background flex min-h-0 flex-1 items-center justify-center px-4"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="text-muted-foreground flex items-center gap-2 text-sm">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <span>{label}</span>
+      </div>
+    </section>
+  )
+}
+
 function WorkspaceShellLayout({
   username,
   projectSlug,
   workspaceSection,
   navConversationId,
   workspace,
+  workspaceSlices,
   conversationId,
   conversationItems,
   messages,
   memoryPins,
   problemCustomerDoc,
   isConversationLoading,
+  loadingWorkspaceSection,
   isStreaming,
   activityLabel,
   error,
@@ -1693,32 +2032,52 @@ function WorkspaceShellLayout({
               activeConversationId={navConversationId}
             />
             {workspaceSection === "company-map" ? (
-              <CompanyMapPanel
-                companyMap={workspace.company_map}
-                selectedFieldKey={selectedField?.key ?? null}
-                pendingCandidateId={pendingCandidateId}
-                staleCandidateId={staleCandidateId}
-                onSelectField={(field) => {
-                  setSelectedFieldKey(field.key)
-                }}
-                onAcceptCandidate={onAcceptCandidate}
-                onReplaceCandidate={onReplaceCandidate}
-                onEditAcceptCandidate={onEditAcceptCandidate}
-                onEditReplaceCandidate={onEditReplaceCandidate}
-                onRejectCandidate={onRejectCandidate}
-                onArchiveCandidate={onArchiveCandidate}
-                onClarifyCandidate={onClarifyCandidate}
-                onInspectCandidateSource={handleInspectCandidateSource}
-              />
+              workspaceSlices.companyMap ? (
+                <CompanyMapPanel
+                  companyMap={workspace.company_map}
+                  selectedFieldKey={selectedField?.key ?? null}
+                  pendingCandidateId={pendingCandidateId}
+                  staleCandidateId={staleCandidateId}
+                  onSelectField={(field) => {
+                    setSelectedFieldKey(field.key)
+                  }}
+                  onAcceptCandidate={onAcceptCandidate}
+                  onReplaceCandidate={onReplaceCandidate}
+                  onEditAcceptCandidate={onEditAcceptCandidate}
+                  onEditReplaceCandidate={onEditReplaceCandidate}
+                  onRejectCandidate={onRejectCandidate}
+                  onArchiveCandidate={onArchiveCandidate}
+                  onClarifyCandidate={onClarifyCandidate}
+                  onInspectCandidateSource={handleInspectCandidateSource}
+                />
+              ) : (
+                <WorkspaceSectionLoading
+                  label={
+                    loadingWorkspaceSection === "company-map"
+                      ? "Loading Company Map"
+                      : "Preparing Company Map"
+                  }
+                />
+              )
             ) : null}
             {workspaceSection === "artifacts" ? (
-              <ArtifactHubPanel
-                artifactHub={workspace.artifact_hub}
-                selectedArtifactId={selectedArtifact?.id ?? null}
-                onSelectArtifact={(artifact) => {
-                  setSelectedArtifactId(artifact.id)
-                }}
-              />
+              workspaceSlices.artifactHub ? (
+                <ArtifactHubPanel
+                  artifactHub={workspace.artifact_hub}
+                  selectedArtifactId={selectedArtifact?.id ?? null}
+                  onSelectArtifact={(artifact) => {
+                    setSelectedArtifactId(artifact.id)
+                  }}
+                />
+              ) : (
+                <WorkspaceSectionLoading
+                  label={
+                    loadingWorkspaceSection === "artifacts"
+                      ? "Loading Artifact Hub"
+                      : "Preparing Artifact Hub"
+                  }
+                />
+              )
             ) : null}
             {workspaceSection === "chat" ? (
               <>

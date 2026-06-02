@@ -174,9 +174,17 @@ export function WorkspaceSidebar({
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
-      <div className="shrink-0 space-y-1 p-2">
-        <div className="flex items-center justify-between gap-2 px-0.5">
-          <AppLogoMark href="/projects" showWordmark={false} size="sm" />
+      <div className="shrink-0 space-y-2 p-2">
+        <div className="flex items-center gap-2 px-0.5">
+          <AppLogoMark
+            href="/projects"
+            showWordmark={false}
+            size="sm"
+            className="shrink-0"
+          />
+          <p className="text-foreground min-w-0 flex-1 truncate text-sm leading-snug font-semibold">
+            {projectName}
+          </p>
           {onToggleCollapse ? (
             <Button
               type="button"
@@ -191,9 +199,19 @@ export function WorkspaceSidebar({
           ) : null}
         </div>
 
-        <p className="text-muted-foreground truncate px-2.5 text-xs font-medium">
-          {projectName}
-        </p>
+        <div className="relative px-0.5">
+          <Search
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2"
+            aria-hidden="true"
+          />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search chats"
+            className="bg-muted/30 h-9 border-transparent pl-9 text-sm shadow-none"
+            aria-label="Search conversations"
+          />
+        </div>
 
         <Button
           type="button"
@@ -205,20 +223,6 @@ export function WorkspaceSidebar({
           <Plus className="size-4 shrink-0" aria-hidden="true" />
           New chat
         </Button>
-
-        <div className="relative px-0.5">
-          <Search
-            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2"
-            aria-hidden="true"
-          />
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search chats"
-            className="bg-muted/30 h-9 border-transparent pl-9 text-xs shadow-none"
-            aria-label="Search conversations (preview)"
-          />
-        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
