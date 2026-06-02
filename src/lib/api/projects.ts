@@ -14,6 +14,7 @@ import type {
   ProjectSummaryRead,
   WorkspaceRead,
 } from "@/lib/api/types"
+import { normalizeMemoryPins } from "@/lib/api/normalize-memory-pin"
 
 type CandidateReplaceOptions = {
   expected_revision_id?: string | null
@@ -53,6 +54,15 @@ export async function getProject(projectId: string): Promise<ProjectRead> {
   return apiJson<ProjectRead>(`/projects/${projectId}`)
 }
 
+export async function resolveProjectBySlug(
+  username: string,
+  projectSlug: string
+): Promise<ProjectRead> {
+  return apiJson<ProjectRead>(
+    `/users/${encodeURIComponent(username)}/projects/${encodeURIComponent(projectSlug)}`
+  )
+}
+
 export async function getCompanyMap(
   projectId: string
 ): Promise<CompanyMapRead> {
@@ -60,7 +70,8 @@ export async function getCompanyMap(
 }
 
 export async function listPins(projectId: string): Promise<MemoryPinRead[]> {
-  return apiJson<MemoryPinRead[]>(`/projects/${projectId}/pins`)
+  const pins = await apiJson<MemoryPinRead[]>(`/projects/${projectId}/pins`)
+  return normalizeMemoryPins(pins)
 }
 
 export async function updatePin(
@@ -224,7 +235,12 @@ export async function getWorkspace(
   projectId: string,
   conversationId: string
 ): Promise<WorkspaceRead> {
-  return apiJson<WorkspaceRead>(
+  const workspace = await apiJson<WorkspaceRead>(
     `/projects/${projectId}/conversations/${conversationId}/workspace`
   )
+
+  return {
+    ...workspace,
+    memory_pins: normalizeMemoryPins(workspace.memory_pins),
+  }
 }

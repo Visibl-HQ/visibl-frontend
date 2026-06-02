@@ -1,10 +1,12 @@
 import { LegacyProjectRedirect } from "@/features/workspace/components/legacy-project-redirect"
 
-type PageProps = {
+type LayoutProps = {
   params: Promise<{ projectId: string }>
 }
 
-export default async function LegacyProjectEntryPage({ params }: PageProps) {
+export default async function LegacyProjectWorkspaceLayout({
+  params,
+}: LayoutProps) {
   const { projectId } = await params
 
   return <LegacyProjectRedirect projectPublicId={projectId} />

@@ -12,7 +12,10 @@ import { usePathname, useRouter } from "next/navigation"
 import { ApiError } from "@/lib/api/client"
 import { getCurrentUser, logout as logoutRequest } from "@/lib/api/auth"
 import type { UserProfile } from "@/lib/api/types"
-import { redirectToGoogleLogin } from "@/features/auth/lib/session"
+import {
+  consumeReturnTo,
+  redirectToGoogleLogin,
+} from "@/features/auth/lib/session"
 
 type AuthContextValue = {
   user: UserProfile | null
@@ -25,6 +28,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 const PUBLIC_AUTH_PATHS = new Set(["/", "/login", "/signup", "/auth/callback"])
+const PUBLIC_SESSION_REDIRECT_PATHS = new Set(["/", "/login"])
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -53,6 +57,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false
 
     if (isPublicPath) {
+      if (!PUBLIC_SESSION_REDIRECT_PATHS.has(pathname)) {
+        return () => {
+          cancelled = true
+        }
+      }
+
+      async function loadPublicSession() {
+        try {
+          const profile = await refreshUser()
+
+          if (
+            !cancelled &&
+            profile &&
+            PUBLIC_SESSION_REDIRECT_PATHS.has(pathname)
+          ) {
+            router.replace(consumeReturnTo("/projects"))
+          }
+        } catch {
+          if (!cancelled) {
+            setUser(null)
+          }
+        } finally {
+          if (!cancelled) {
+            setIsLoading(false)
+          }
+        }
+      }
+
+      void loadPublicSession()
+
       return () => {
         cancelled = true
       }
@@ -78,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [isPublicPath, pathname, refreshUser])
+  }, [isPublicPath, pathname, refreshUser, router])
 
   const logout = useCallback(async () => {
     try {

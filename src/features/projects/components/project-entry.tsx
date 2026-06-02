@@ -3,18 +3,19 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
-import { listConversations } from "@/lib/api/projects"
+import { listConversations, resolveProjectBySlug } from "@/lib/api/projects"
 import {
   conversationPath,
   draftConversationPath,
-} from "@/features/workspace/lib/conversation-routing"
+} from "@/lib/routing/paths"
 import { sortConversationsByRecent } from "@/features/workspace/data/conversation-meta"
 
 type ProjectEntryProps = {
-  projectId: string
+  username: string
+  projectSlug: string
 }
 
-export function ProjectEntry({ projectId }: ProjectEntryProps) {
+export function ProjectEntry({ username, projectSlug }: ProjectEntryProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
@@ -23,15 +24,22 @@ export function ProjectEntry({ projectId }: ProjectEntryProps) {
 
     async function openProject() {
       try {
-        const page = await listConversations(projectId, { limit: 20 })
+        const project = await resolveProjectBySlug(username, projectSlug)
+        const page = await listConversations(project.public_id, { limit: 20 })
         const existing = sortConversationsByRecent(page.items)[0]
 
-        if (existing) {
-          router.replace(conversationPath(projectId, existing.id))
+        if (cancelled) {
           return
         }
 
-        router.replace(draftConversationPath(projectId))
+        if (existing) {
+          router.replace(
+            conversationPath(username, projectSlug, existing.public_id)
+          )
+          return
+        }
+
+        router.replace(draftConversationPath(username, projectSlug))
       } catch (entryError) {
         if (!cancelled) {
           setError(
@@ -48,7 +56,7 @@ export function ProjectEntry({ projectId }: ProjectEntryProps) {
     return () => {
       cancelled = true
     }
-  }, [projectId, router])
+  }, [projectSlug, router, username])
 
   if (error) {
     return <p className="text-muted-foreground px-4 py-10 text-sm">{error}</p>
