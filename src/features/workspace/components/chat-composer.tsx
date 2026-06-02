@@ -86,7 +86,9 @@ export function ChatComposer({
       setPendingFiles([])
     } catch (error) {
       setImportError(
-        error instanceof Error ? error.message : "Could not import pasted files."
+        error instanceof Error
+          ? error.message
+          : "Could not import pasted files."
       )
     }
   }
@@ -264,7 +266,9 @@ export function ChatComposer({
           {onImportFiles ? (
             <>
               <span aria-hidden="true">·</span>
-              <span>Paste or drop files into the chat box to import context.</span>
+              <span>
+                Paste or drop files into the chat box to import context.
+              </span>
             </>
           ) : null}
           {onExploreSeparately ? (

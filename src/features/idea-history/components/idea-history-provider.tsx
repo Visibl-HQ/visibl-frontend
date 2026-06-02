@@ -15,6 +15,7 @@ import * as ideaHistoryApi from "@/lib/api/idea-history"
 import {
   adaptBinding,
   adaptBootstrap,
+  adaptBranch,
   adaptCheckpoint,
   adaptOneOffSession,
   applyBindingUpdate,
@@ -93,6 +94,7 @@ type IdeaHistoryContextValue = {
   selectGraphNode: (node: GitGraphNode) => Promise<void>
   mergeBranchToMain: (branchId: string) => Promise<boolean>
   registerConversation: (conversationId: string) => void
+  retryHistoryLoad: () => Promise<void>
 }
 
 const IdeaHistoryContext = createContext<IdeaHistoryContextValue | null>(null)
@@ -106,6 +108,7 @@ type IdeaHistoryProviderProps = {
   onApplyBranchMessageView?: (messageCount: number) => void
   onApplyCheckpointSnapshot?: (checkpoint: Checkpoint) => void
   onNavigateConversation?: (conversationId: string) => void
+  onNavigateToCheckpoint?: (checkpoint: Checkpoint) => void
   children: React.ReactNode
 }
 
@@ -141,6 +144,7 @@ export function IdeaHistoryProvider({
   onApplyBranchMessageView,
   onApplyCheckpointSnapshot,
   onNavigateConversation,
+  onNavigateToCheckpoint,
   children,
 }: IdeaHistoryProviderProps) {
   const [state, setState] = useState<ProjectHistoryState>(() =>
@@ -180,6 +184,13 @@ export function IdeaHistoryProvider({
       )
 
       if (checkpoint) {
+        const checkpointConversationId =
+          checkpoint.conversationId || conversationId
+
+        if (checkpointConversationId !== conversationId) {
+          return
+        }
+
         onApplyBranchMessageView?.(checkpoint.messageCount)
         onApplyCheckpointSnapshot?.(cloneCheckpointSnapshot(checkpoint))
         appliedBranchViewKeyRef.current = `${conversationId}:${checkpoint.branchId}:${checkpoint.id}`
@@ -216,6 +227,20 @@ export function IdeaHistoryProvider({
 
     return () => {
       cancelled = true
+    }
+  }, [projectId])
+
+  const retryHistoryLoad = useCallback(async () => {
+    setIsHistoryLoading(true)
+    setHistoryError(null)
+
+    try {
+      const bootstrap = await ideaHistoryApi.fetchIdeaHistory(projectId)
+      setState(adaptBootstrap(bootstrap))
+    } catch (error) {
+      setHistoryError(formatApiError(error, "Could not load idea history."))
+    } finally {
+      setIsHistoryLoading(false)
     }
   }, [projectId])
 
@@ -548,22 +573,23 @@ export function IdeaHistoryProvider({
         applyRestore({
           checkpoint: forkCheckpoint
             ? {
-                id: forkCheckpoint.id,
-                branch_id: forkCheckpoint.branchId,
-                conversation_id: forkCheckpoint.conversationId,
+                public_id: forkCheckpoint.id,
+                branch_public_id: forkCheckpoint.branchId,
+                conversation_public_id: forkCheckpoint.conversationId,
                 title: forkCheckpoint.title,
                 note: forkCheckpoint.note ?? null,
                 created_at: forkCheckpoint.createdAt,
                 pins_snapshot: forkCheckpoint.pinsSnapshot,
                 doc_snapshot: forkCheckpoint.docSnapshot,
                 message_count: forkCheckpoint.messageCount,
-                parent_checkpoint_id: forkCheckpoint.parentCheckpointId,
+                parent_checkpoint_public_id: forkCheckpoint.parentCheckpointId,
+                is_merge: false,
               }
             : null,
           restore: response.restore,
         })
 
-        return response.branch.id
+        return adaptBranch(response.branch).id
       } catch (error) {
         setActionError(formatApiError(error, "Could not create branch."))
         return null
@@ -595,18 +621,18 @@ export function IdeaHistoryProvider({
           const targetConversationId =
             checkpoint.conversationId || conversationId
 
+          if (
+            checkpoint.conversationId &&
+            checkpoint.conversationId !== conversationId
+          ) {
+            onNavigateToCheckpoint?.(cloneCheckpointSnapshot(checkpoint))
+          }
+
           await updateBindingAndApply(
             checkpoint.branchId,
             checkpoint.id,
             targetConversationId
           )
-
-          if (
-            checkpoint.conversationId &&
-            checkpoint.conversationId !== conversationId
-          ) {
-            onNavigateConversation?.(checkpoint.conversationId)
-          }
         } catch (error) {
           setActionError(formatApiError(error, "Could not open checkpoint."))
         } finally {
@@ -633,7 +659,7 @@ export function IdeaHistoryProvider({
         }
       }
     },
-    [conversationId, onNavigateConversation, updateBindingAndApply]
+    [conversationId, onNavigateConversation, onNavigateToCheckpoint, updateBindingAndApply]
   )
 
   const mergeBranchToMain = useCallback(
@@ -707,6 +733,7 @@ export function IdeaHistoryProvider({
     selectGraphNode,
     mergeBranchToMain,
     registerConversation,
+    retryHistoryLoad,
   }
 
   return (

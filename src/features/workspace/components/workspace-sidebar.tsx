@@ -78,6 +78,9 @@ type WorkspaceSidebarProps = {
   activeCheckpointId?: string | null
   onSelectGraphNode?: (node: GitGraphNode) => void
   getGraphNodeInsight?: (node: GitGraphNode) => GraphNodeInsight | null
+  isHistoryLoading?: boolean
+  historyError?: string | null
+  onRetryHistory?: () => void | Promise<void>
   className?: string
 }
 
@@ -98,6 +101,9 @@ export function WorkspaceSidebar({
   activeCheckpointId = null,
   onSelectGraphNode,
   getGraphNodeInsight,
+  isHistoryLoading = false,
+  historyError = null,
+  onRetryHistory,
   className,
 }: WorkspaceSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -280,6 +286,9 @@ export function WorkspaceSidebar({
             {...(getGraphNodeInsight
               ? { getNodeInsight: getGraphNodeInsight }
               : {})}
+            isHistoryLoading={isHistoryLoading}
+            historyError={historyError}
+            {...(onRetryHistory ? { onRetryHistory } : {})}
           />
         )}
       </div>

@@ -104,7 +104,8 @@ export function ExportImportWizard({
     (conversation) => conversation.id === selectedConversationId
   )
 
-  const effectiveProvider = parsedProvider ?? (mode === "ai_memory" ? null : mode)
+  const effectiveProvider =
+    parsedProvider ?? (mode === "ai_memory" ? null : mode)
 
   useEffect(() => {
     if (!active || prompt !== undefined || promptError !== undefined) {
@@ -380,7 +381,10 @@ export function ExportImportWizard({
             }}
           >
             <div className="bg-background flex size-9 items-center justify-center rounded-full border shadow-sm">
-              <Upload className="text-muted-foreground size-4" aria-hidden="true" />
+              <Upload
+                className="text-muted-foreground size-4"
+                aria-hidden="true"
+              />
             </div>
             <p className="mt-2 text-sm font-medium">Drop export file here</p>
             <p className="text-muted-foreground mt-1 text-xs leading-5">

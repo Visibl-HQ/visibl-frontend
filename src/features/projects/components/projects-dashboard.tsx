@@ -17,7 +17,10 @@ import { NewProjectDialog } from "@/features/projects/components/new-project-dia
 import { ProjectCard } from "@/features/projects/components/project-card"
 import { UserMenu } from "@/features/projects/components/user-menu"
 import { createProject, listProjects } from "@/lib/api/projects"
-import { draftConversationPath, projectPathFromProject } from "@/lib/routing/paths"
+import {
+  draftConversationPath,
+  projectPathFromProject,
+} from "@/lib/routing/paths"
 import { slugifyProjectName } from "@/lib/routing/slug"
 import type { ProjectSummaryRead } from "@/lib/api/types"
 

@@ -19,10 +19,13 @@ export async function createUploadUrl(
   projectPublicId: string,
   body: UploadUrlRequest
 ): Promise<UploadUrlResponse> {
-  return apiJson<UploadUrlResponse>(ingestionPath(projectPublicId, "/upload-url"), {
-    method: "POST",
-    body: JSON.stringify(body),
-  })
+  return apiJson<UploadUrlResponse>(
+    ingestionPath(projectPublicId, "/upload-url"),
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    }
+  )
 }
 
 /** @alias createUploadUrl */

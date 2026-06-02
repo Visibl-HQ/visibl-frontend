@@ -490,7 +490,10 @@ export function useIngestionFlow({
         setPhase("done")
         onActivityLabel(null)
         onError(
-          getIngestionErrorMessage(applyError, "This import was already applied.")
+          getIngestionErrorMessage(
+            applyError,
+            "This import was already applied."
+          )
         )
         reset()
         return
@@ -502,7 +505,15 @@ export function useIngestionFlow({
       onActivityLabel(null)
       onError(message)
     }
-  }, [jobId, jobIds, onActivityLabel, onApplySuccess, onError, projectId, reset])
+  }, [
+    jobId,
+    jobIds,
+    onActivityLabel,
+    onApplySuccess,
+    onError,
+    projectId,
+    reset,
+  ])
 
   const isBusy =
     phase === "uploading" || phase === "extracting" || phase === "applying"

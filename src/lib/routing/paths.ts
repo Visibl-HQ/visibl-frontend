@@ -6,7 +6,10 @@ export type ProjectRouteParams = {
   projectSlug: string
 }
 
-export function projectRootPath({ username, projectSlug }: ProjectRouteParams): string {
+export function projectRootPath({
+  username,
+  projectSlug,
+}: ProjectRouteParams): string {
   return `/${username}/projects/${projectSlug}`
 }
 

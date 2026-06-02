@@ -4,10 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { listConversations, resolveProjectBySlug } from "@/lib/api/projects"
-import {
-  conversationPath,
-  draftConversationPath,
-} from "@/lib/routing/paths"
+import { conversationPath, draftConversationPath } from "@/lib/routing/paths"
 import { sortConversationsByRecent } from "@/features/workspace/data/conversation-meta"
 
 type ProjectEntryProps = {

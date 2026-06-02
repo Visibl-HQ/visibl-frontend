@@ -11,6 +11,7 @@ import type {
   OneOffSessionRead,
   PotentialImpactRead,
 } from "@/lib/api/types"
+import { normalizeMemoryPins } from "@/lib/api/normalize-memory-pin"
 import type {
   Branch,
   Checkpoint,
@@ -23,31 +24,31 @@ import type {
 
 export function adaptBranch(read: BranchRead): Branch {
   return {
-    id: read.id,
+    id: read.public_id,
     name: read.name,
     createdAt: read.created_at,
-    forkedFromCheckpointId: read.forked_from_checkpoint_id ?? "",
-    parentBranchId: read.parent_branch_id,
-    headCheckpointId: read.head_checkpoint_id,
+    forkedFromCheckpointId: read.forked_from_checkpoint_public_id ?? "",
+    parentBranchId: read.parent_branch_public_id,
+    headCheckpointId: read.head_checkpoint_public_id,
     status: read.status,
   }
 }
 
 export function adaptCheckpoint(read: CheckpointRead): Checkpoint {
   return {
-    id: read.id,
-    branchId: read.branch_id,
-    conversationId: read.conversation_id,
+    id: read.public_id,
+    branchId: read.branch_public_id,
+    conversationId: read.conversation_public_id,
     title: read.title,
     ...(read.note ? { note: read.note } : {}),
     createdAt: read.created_at,
-    pinsSnapshot: read.pins_snapshot.map((pin) => ({ ...pin })),
+    pinsSnapshot: normalizeMemoryPins(read.pins_snapshot),
     docSnapshot: {
       ...read.doc_snapshot,
       checklist: { ...read.doc_snapshot.checklist },
     },
     messageCount: read.message_count,
-    parentCheckpointId: read.parent_checkpoint_id,
+    parentCheckpointId: read.parent_checkpoint_public_id,
   }
 }
 
@@ -55,10 +56,10 @@ export function adaptBinding(
   read: ConversationBindingRead
 ): ConversationBinding {
   return {
-    conversationId: read.conversation_id,
-    branchId: read.branch_id,
-    baseCheckpointId: read.base_checkpoint_id,
-    lastCheckpointId: read.last_checkpoint_id,
+    conversationId: read.conversation_public_id,
+    branchId: read.branch_public_id,
+    baseCheckpointId: read.base_checkpoint_public_id,
+    lastCheckpointId: read.last_checkpoint_public_id,
   }
 }
 
@@ -83,11 +84,11 @@ export function adaptOneOffMessage(read: OneOffMessageRead): OneOffMessage {
 
 export function adaptOneOffSession(read: OneOffSessionRead): OneOffSession {
   return {
-    id: read.id,
+    id: read.public_id,
     question: read.question,
     messages: read.messages.map(adaptOneOffMessage),
     potentialImpacts: read.potential_impacts.map(adaptPotentialImpact),
-    forkCheckpointId: read.fork_checkpoint_id,
+    forkCheckpointId: read.fork_checkpoint_public_id,
     createdAt: read.created_at,
   }
 }
@@ -104,7 +105,7 @@ export function adaptBootstrap(
 
   return {
     version: read.version,
-    mainBranchId: read.main_branch_id,
+    mainBranchId: read.main_branch_public_id,
     branches: read.branches.map(adaptBranch),
     checkpoints: read.checkpoints.map(adaptCheckpoint),
     conversationBindings,
@@ -129,7 +130,7 @@ export function checkpointWithLiveRestore(
 ): Checkpoint {
   return {
     ...template,
-    pinsSnapshot: restore.memory_pins.map((pin) => ({ ...pin })),
+    pinsSnapshot: normalizeMemoryPins(restore.memory_pins),
     docSnapshot: {
       ...restore.problem_customer_doc,
       checklist: { ...restore.problem_customer_doc.checklist },
@@ -211,10 +212,10 @@ export function applyCheckpointCreated(
   }
 
   const binding = adaptBinding({
-    conversation_id: checkpointRead.conversation_id,
-    branch_id: checkpointRead.branch_id,
-    base_checkpoint_id: checkpoint.id,
-    last_checkpoint_id: checkpoint.id,
+    conversation_public_id: checkpointRead.conversation_public_id,
+    branch_public_id: checkpointRead.branch_public_id,
+    base_checkpoint_public_id: checkpoint.id,
+    last_checkpoint_public_id: checkpoint.id,
   })
 
   return setConversationBinding(nextState, binding)

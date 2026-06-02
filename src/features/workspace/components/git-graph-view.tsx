@@ -2,8 +2,9 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { GitBranch, GitMerge, MapPin, Sparkles } from "lucide-react"
+import { AlertCircle, GitBranch, GitMerge, Loader2, MapPin, RefreshCw, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   GIT_GRAPH_LANE_COLORS,
   type GitGraphNode,
@@ -26,6 +27,9 @@ type GitGraphViewProps = {
   activeCheckpointId?: string | null
   onSelectNode?: (node: GitGraphNode) => void
   getNodeInsight?: (node: GitGraphNode) => GraphNodeInsight | null
+  isHistoryLoading?: boolean
+  historyError?: string | null
+  onRetryHistory?: () => void | Promise<void>
   className?: string
 }
 
@@ -288,6 +292,9 @@ export function GitGraphView({
   activeCheckpointId,
   onSelectNode,
   getNodeInsight,
+  isHistoryLoading = false,
+  historyError = null,
+  onRetryHistory,
   className,
 }: GitGraphViewProps) {
   const [hoverState, setHoverState] = useState<{
@@ -313,7 +320,38 @@ export function GitGraphView({
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
-      {nodes.length === 0 ? (
+      {isHistoryLoading ? (
+        <div className="text-muted-foreground flex items-center gap-2 px-3 py-4 text-xs">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          Loading idea history…
+        </div>
+      ) : historyError ? (
+        <div className="mx-3 my-3 grid gap-2">
+          <div className="bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg px-3 py-2 text-xs">
+            <AlertCircle
+              className="mt-0.5 size-3.5 shrink-0"
+              aria-hidden="true"
+            />
+            <p>
+              {historyError === "Internal server error"
+                ? "Could not load idea history. A checkpoint snapshot may be incompatible — retry after the backend restarts."
+                : historyError}
+            </p>
+          </div>
+          {onRetryHistory ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 justify-self-start text-xs"
+              onClick={() => void onRetryHistory()}
+            >
+              <RefreshCw className="size-3.5" aria-hidden="true" />
+              Retry
+            </Button>
+          ) : null}
+        </div>
+      ) : nodes.length === 0 ? (
         <p className="text-muted-foreground px-3 py-4 text-xs leading-5">
           No checkpoints yet. Use the checkpoint button above chat to snapshot
           your story — branches and merges appear here.

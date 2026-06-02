@@ -129,7 +129,7 @@ export function MemoryPinsPanel({
 
             return (
               <div
-                key={pin.id}
+                key={pin.public_id}
                 className="border-border/60 bg-muted/15 rounded-md border px-2.5 py-2"
               >
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
@@ -143,7 +143,7 @@ export function MemoryPinsPanel({
                     {pin.status}
                   </Badge>
                 </div>
-                {editingId === pin.id ? (
+                {editingId === pin.public_id ? (
                   <div className="space-y-2">
                     <Textarea
                       value={draftContent}
@@ -157,7 +157,7 @@ export function MemoryPinsPanel({
                         className="h-7 text-xs"
                         disabled={
                           !onEdit ||
-                          pendingPinId === pin.id ||
+                          pendingPinId === pin.public_id ||
                           draftContent.trim().length === 0
                         }
                         onClick={async () => {
@@ -216,7 +216,7 @@ export function MemoryPinsPanel({
                           size="icon-sm"
                           variant="ghost"
                           aria-label="Confirm pin"
-                          disabled={pendingPinId === pin.id}
+                          disabled={pendingPinId === pin.public_id}
                           onClick={() => onConfirm?.(pin)}
                         >
                           <Check className="size-3.5" aria-hidden="true" />
@@ -227,9 +227,9 @@ export function MemoryPinsPanel({
                         size="icon-sm"
                         variant="ghost"
                         aria-label="Edit pin"
-                        disabled={pendingPinId === pin.id}
+                        disabled={pendingPinId === pin.public_id}
                         onClick={() => {
-                          setEditingId(pin.id)
+                          setEditingId(pin.public_id)
                           setDraftContent(getPinContent(pin))
                         }}
                       >
@@ -240,12 +240,12 @@ export function MemoryPinsPanel({
                         size="sm"
                         variant="ghost"
                         className="h-7 text-xs"
-                        disabled={pendingPinId === pin.id}
+                        disabled={pendingPinId === pin.public_id}
                         onClick={() => onPromote?.(pin)}
                       >
                         Promote
                       </Button>
-                      {pin.source_message_id ? (
+                      {pin.source_message_public_id ? (
                         <Button
                           type="button"
                           size="icon-sm"
@@ -292,7 +292,7 @@ export function MemoryPinsPanel({
                         size="icon-sm"
                         variant="ghost"
                         aria-label="Archive pin"
-                        disabled={pendingPinId === pin.id}
+                        disabled={pendingPinId === pin.public_id}
                         onClick={() => onArchive?.(pin)}
                       >
                         <Archive className="size-3.5" aria-hidden="true" />

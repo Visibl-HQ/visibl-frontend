@@ -75,43 +75,43 @@ export async function hydrateMissingConversationPreviews(input: {
   onPreview: (conversationId: string, preview: string) => void
   signal?: AbortSignal
 }): Promise<void> {
-  const targets = input.conversations.filter((conversation) => {
-    if (conversation.id === input.activeConversationId) {
-      return false
+  const targets = input.conversations
+    .filter((conversation) => {
+      if (conversation.public_id === input.activeConversationId) {
+        return false
+      }
+
+      if (conversation.title?.trim()) {
+        return false
+      }
+
+      if (input.knownPreviews[conversation.public_id]) {
+        return false
+      }
+
+      return true
+    })
+    .slice(0, 3)
+
+  for (const conversation of targets) {
+    if (input.signal?.aborted) {
+      return
     }
 
-    if (conversation.title?.trim()) {
-      return false
-    }
+    try {
+      const workspace = await getWorkspace(input.projectId, conversation.public_id)
 
-    if (input.knownPreviews[conversation.id]) {
-      return false
-    }
-
-    return true
-  })
-
-  await Promise.all(
-    targets.map(async (conversation) => {
       if (input.signal?.aborted) {
         return
       }
 
-      try {
-        const workspace = await getWorkspace(input.projectId, conversation.id)
+      const preview = extractConversationPreview(workspace)
 
-        if (input.signal?.aborted) {
-          return
-        }
-
-        const preview = extractConversationPreview(workspace)
-
-        if (preview) {
-          input.onPreview(conversation.id, preview)
-        }
-      } catch {
-        // Ignore per-conversation preview failures.
+      if (preview) {
+        input.onPreview(conversation.public_id, preview)
       }
-    })
-  )
+    } catch {
+      // Ignore per-conversation preview failures.
+    }
+  }
 }

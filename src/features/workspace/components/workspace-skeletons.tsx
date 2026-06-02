@@ -38,10 +38,7 @@ export function CompanyMapPanelSkeleton() {
 
 export function ArtifactHubPanelSkeleton() {
   return (
-    <div
-      className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2"
-      aria-busy="true"
-    >
+    <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2" aria-busy="true">
       {Array.from({ length: 4 }).map((_, index) => (
         <Skeleton key={index} className="h-32 w-full" />
       ))}

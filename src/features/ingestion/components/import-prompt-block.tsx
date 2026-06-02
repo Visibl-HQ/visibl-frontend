@@ -8,7 +8,10 @@ import {
   AI_MEMORY_EXPORT_STEPS,
 } from "@/features/ingestion/data/ai-memory-export-prompt"
 import { getImportPrompt } from "@/lib/api/ingestion"
-import type { ImportPromptProvider, ImportPromptResponse } from "@/lib/api/types"
+import type {
+  ImportPromptProvider,
+  ImportPromptResponse,
+} from "@/lib/api/types"
 
 type ImportPromptBlockProps = {
   projectId: string

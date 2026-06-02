@@ -67,7 +67,10 @@ export function LegacyProjectRedirect({
               conversationSegment
             )
           }
-        } else if (section === "chat" && pathname === `/projects/${projectPublicId}`) {
+        } else if (
+          section === "chat" &&
+          pathname === `/projects/${projectPublicId}`
+        ) {
           target = projectPathFromProject(user.username, project)
         }
 

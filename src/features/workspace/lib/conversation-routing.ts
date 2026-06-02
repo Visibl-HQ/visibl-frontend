@@ -6,10 +6,7 @@ export function isDraftConversationId(
   return conversationId === DRAFT_CONVERSATION_ID
 }
 
-export {
-  conversationPath,
-  draftConversationPath,
-} from "@/lib/routing/paths"
+export { conversationPath, draftConversationPath } from "@/lib/routing/paths"
 
 /** @deprecated Use conversationPath with username and projectSlug */
 export function legacyConversationPath(

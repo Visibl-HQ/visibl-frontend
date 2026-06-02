@@ -48,8 +48,8 @@ type CompanyMapCandidateQueueProps = {
 
 function hasSourceReference(candidate: CompanyMapCandidateRead): boolean {
   return Boolean(
-    candidate.source_message_id ||
-    candidate.source_pin_id ||
+    candidate.source_message_public_id ||
+    candidate.source_pin_public_id ||
     candidate.source_document_id ||
     candidate.source_document_label
   )
@@ -112,18 +112,18 @@ export function CompanyMapCandidateQueue({
         <div className="divide-border/70 max-h-[38rem] divide-y overflow-y-auto overscroll-contain">
           {candidates.map((candidate) => {
             const field = fieldByKey.get(candidate.field_key)
-            const isEditing = editingId === candidate.id
-            const isPending = pendingCandidateId === candidate.id
+            const isEditing = editingId === candidate.public_id
+            const isPending = pendingCandidateId === candidate.public_id
             const currentRevisionId = field?.revision_id ?? null
             const isStaleAgainstCurrent = Boolean(
               currentRevisionId &&
               candidate.baseline_revision_id !== currentRevisionId
             )
             const showReplaceFlow =
-              staleCandidateId === candidate.id || isStaleAgainstCurrent
+              staleCandidateId === candidate.public_id || isStaleAgainstCurrent
 
             return (
-              <article key={candidate.id} className="px-4 py-3">
+              <article key={candidate.public_id} className="px-4 py-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
@@ -267,7 +267,7 @@ export function CompanyMapCandidateQueue({
                         variant="outline"
                         disabled={isPending}
                         onClick={() => {
-                          setEditingId(candidate.id)
+                          setEditingId(candidate.public_id)
                           setDraftValue(candidate.suggested_value)
                         }}
                       >
@@ -342,7 +342,7 @@ export function CompanyMapCandidateQueue({
           <div className="mt-2 max-h-72 space-y-2 overflow-y-auto overscroll-contain">
             {reviewedCandidates.map((candidate) => (
               <div
-                key={candidate.id}
+                key={candidate.public_id}
                 className="bg-muted/35 rounded-md px-2.5 py-2 text-xs"
               >
                 <div className="flex items-start justify-between gap-2">

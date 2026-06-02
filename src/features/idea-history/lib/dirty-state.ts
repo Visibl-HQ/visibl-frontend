@@ -69,7 +69,7 @@ export function computeDirtyChanges({
       const previous = baseline.pinsSnapshot[index]
       return (
         !previous ||
-        previous.id !== pin.id ||
+        previous.public_id !== pin.public_id ||
         JSON.stringify(previous.payload) !== JSON.stringify(pin.payload)
       )
     })

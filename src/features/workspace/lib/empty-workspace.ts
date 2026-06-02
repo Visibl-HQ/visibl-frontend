@@ -43,8 +43,8 @@ export function createDraftConversation(projectId: string): ConversationRead {
   const now = new Date().toISOString()
 
   return {
-    id: DRAFT_CONVERSATION_ID,
-    project_id: projectId,
+    public_id: DRAFT_CONVERSATION_ID,
+    project_public_id: projectId,
     title: null,
     status: "active",
     created_at: now,
@@ -59,7 +59,7 @@ export function createDraftWorkspace(
 ): WorkspaceRead {
   return {
     project,
-    conversation: createDraftConversation(project.id),
+    conversation: createDraftConversation(project.public_id),
     messages: [],
     memory_pins: [],
     problem_customer_doc: createEmptyProblemCustomerDoc(DRAFT_CONVERSATION_ID),
