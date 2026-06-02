@@ -6,6 +6,8 @@ All v1 routes: `{API_BASE_URL}/api/v1`
 
 OpenAPI (live): `{API_BASE_URL}/api/v1/openapi.json`
 
+**Identifiers:** Path segments named `{project_id}`, `{conversation_id}`, etc. carry opaque **`public_id`** strings (~22 URL-safe chars), not UUIDs. JSON resources expose `public_id` / `*_public_id` fields. See backend `context-for-frontend/07-frontend-migration-public-ids-and-errors.md`.
+
 ---
 
 ## Health
@@ -60,8 +62,7 @@ Response `201` — `ProjectRead`:
 
 ```json
 {
-  "id": "uuid",
-  "owner_user_id": "uuid",
+  "public_id": "opaque-token",
   "name": "Acme Startup",
   "current_goal": "...",
   "current_stage": "...",
@@ -84,7 +85,7 @@ Response:
 {
   "items": [
     {
-      "id": "uuid",
+      "public_id": "opaque-token",
       "name": "Acme Startup",
       "current_stage": "idea",
       "current_goal": "...",
@@ -107,7 +108,7 @@ Response:
 GET /projects/{project_id}
 ```
 
-`404` if not found or not owner.
+`404` if not found. Cross-user access returns **403** `FORBIDDEN` (not 404).
 
 ---
 
@@ -133,8 +134,8 @@ Response `201` — `ConversationRead`:
 
 ```json
 {
-  "id": "uuid",
-  "project_id": "uuid",
+  "public_id": "opaque-token",
+  "project_public_id": "opaque-token",
   "title": "First intake",
   "status": "active",
   "created_at": "...",
@@ -308,13 +309,21 @@ Loop while `next_cursor` is non-null.
 
 ## Standard error body
 
-FastAPI default:
+All API errors normalize to:
 
 ```json
-{ "detail": "Human-readable message" }
+{
+  "error": {
+    "code": "CONVERSATION_NOT_FOUND",
+    "message": "Human-readable message",
+    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
 ```
 
-Validation errors may return `detail` as an array of field errors.
+Frontend: `ApiError` in `src/lib/api/client.ts` (`code`, `requestId`, `message`). Legacy FastAPI `{ "detail": "..." }` may still appear during rollout; the client falls back to `detail` when `error` is absent.
+
+Validation errors may still return `detail` as an array of field errors on some routes.
 
 ---
 
@@ -328,6 +337,49 @@ fetch(url, { credentials: "include" })
 
 ---
 
+## Ingestion (file & context import)
+
+Base: `/api/v1/projects/{projectPublicId}/ingestion` — preview-then-apply flow (poll job, review preview, apply).
+
+Path and body identifiers use opaque **`public_id` strings** (URL-safe tokens), not UUIDs.
+
+### Error shape
+
+```json
+{
+  "error": {
+    "code": "CONVERSATION_NOT_FOUND",
+    "message": "Conversation not found",
+    "request_id": "..."
+  }
+}
+```
+
+Frontend maps `error.code` via `src/features/ingestion/lib/ingestion-errors.ts`. S3 presigned PUT failures are handled separately (`S3UploadError`, step `s3_put`).
+
+| Code                     | HTTP | User-facing                  |
+| ------------------------ | ---- | ---------------------------- |
+| `CONVERSATION_NOT_FOUND` | 404  | Conversation stale / missing |
+| `FORBIDDEN`              | 403  | Not project owner            |
+| `UPLOAD_OBJECT_MISSING`  | 404  | S3 object missing on confirm |
+| `UPLOAD_TOO_LARGE`       | 400  | Over 25MB                    |
+| `UNSUPPORTED_FILE_TYPE`  | 400  | MIME/extension rejected      |
+| `JOB_ALREADY_APPLIED`    | 409  | Apply called twice           |
+| `JOB_NOT_FOUND`          | 404  | Invalid job id               |
+
+| Method | Path                         | Purpose                                                   |
+| ------ | ---------------------------- | --------------------------------------------------------- |
+| POST   | `/upload-url`                | Presigned S3 URL for file upload                          |
+| POST   | `/source-items`              | Confirm upload or submit paste/export text → `{ job_id }` |
+| GET    | `/jobs/{jobPublicId}`        | Poll extraction; includes `preview` when succeeded        |
+| POST   | `/jobs/{jobPublicId}/apply`  | Apply preview to pins + problem/customer doc              |
+| POST   | `/parse-export`              | Parse ChatGPT/Claude export file → conversation picker    |
+| GET    | `/import-prompts/{provider}` | Wizard copy (`chatgpt`, `claude`, `generic`)              |
+
+Frontend: `src/lib/api/ingestion.ts`, `src/features/ingestion/`. Backend contract: `visibl-backend/context-for-frontend/06-ingestion-api.md`.
+
+---
+
 ## Not available in v1 (do not build against)
 
 | Feature                          | Status                 |
@@ -336,8 +388,7 @@ fetch(url, { credentials: "include" })
 | DELETE project / conversation    | Not implemented        |
 | POST pin / PATCH checklist       | Tools only (assistant) |
 | List messages (standalone)       | Use workspace          |
-| Upload files                     | Not implemented        |
-| Git graph / commits              | Placeholder UI         |
+| Git graph / commits              | Idea history API       |
 | Other doc types (GTM, TAM, deck) | Future                 |
 | Hosted public pages              | Future                 |
 | WebSocket chat                   | SSE only               |

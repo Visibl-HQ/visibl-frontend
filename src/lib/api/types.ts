@@ -19,8 +19,7 @@ export type RefreshResponse = {
 }
 
 export type ProjectRead = {
-  id: string
-  owner_user_id: string
+  public_id: string
   name: string
   current_goal: string | null
   current_stage: string | null
@@ -31,7 +30,7 @@ export type ProjectRead = {
 }
 
 export type ProjectSummaryRead = {
-  id: string
+  public_id: string
   name: string
   current_stage: string | null
   current_goal: string | null
@@ -46,8 +45,8 @@ export type CursorPage<T> = {
 }
 
 export type ConversationRead = {
-  id: string
-  project_id: string
+  public_id: string
+  project_public_id: string
   title: string | null
   status: "active" | "archived"
   created_at: string
@@ -55,8 +54,8 @@ export type ConversationRead = {
 }
 
 export type MessageRead = {
-  id: string
-  conversation_id: string
+  public_id: string
+  conversation_public_id: string
   role: "user" | "assistant"
   content: string
   sequence: number
@@ -73,9 +72,8 @@ export type NotePinPayload = {
 }
 
 export type MemoryPinRead = {
-  id: string
-  project_id: string | null
-  conversation_id: string
+  public_id: string
+  conversation_public_id: string
   pin_type:
     | "fact"
     | "founder_claim"
@@ -99,10 +97,9 @@ export type MemoryPinRead = {
   title: string | null
   content: string | null
   field_key: string | null
-  source_message_id: string | null
+  source_message_public_id: string | null
   source_document_id: string | null
   source_document_label: string | null
-  source_fingerprint: string | null
   created_at: string
   updated_at: string
 }
@@ -153,8 +150,8 @@ export type EvidenceRead = {
   label: string
   detail: string
   source_type: string
-  pin_id: string | null
-  message_id: string | null
+  pin_public_id: string | null
+  message_public_id: string | null
   document_id: string | null
   document_label: string | null
 }
@@ -189,7 +186,7 @@ export type CompanyMapGroupRead = {
 }
 
 export type CompanyMapRead = {
-  project_id: string
+  project_public_id: string
   groups: CompanyMapGroupRead[]
   candidates: CompanyMapCandidateRead[]
   reviewed_candidates: CompanyMapCandidateRead[]
@@ -204,8 +201,8 @@ export type CaptureReceiptRead = {
 }
 
 export type CompanyMapCandidateRead = {
-  id: string
-  project_id: string
+  public_id: string
+  project_public_id: string
   field_key: string
   field_label: string
   suggested_value: string
@@ -218,8 +215,8 @@ export type CompanyMapCandidateRead = {
     | "archived"
   is_conflict: boolean
   conflict_summary: string | null
-  source_pin_id: string | null
-  source_message_id: string | null
+  source_pin_public_id: string | null
+  source_message_public_id: string | null
   source_document_id: string | null
   source_document_label: string | null
   source_fingerprint: string
@@ -298,7 +295,7 @@ export type ArtifactRead = {
 }
 
 export type ArtifactHubRead = {
-  project_id: string
+  project_public_id: string
   artifacts: ArtifactRead[]
 }
 
@@ -327,46 +324,54 @@ export type CreateConversationBody = {
 
 export type ChatDonePayload = {
   assistant_message_id: string
-  user_message_id: string
+  user_message_public_id: string
   problem_customer_doc: ProblemCustomerDocRead
   memory_pins: MemoryPinRead[]
   company_map: CompanyMapRead
 }
 
+export type ApiErrorPayload = {
+  code: string
+  message: string
+  request_id: string
+}
+
 export type ApiErrorBody = {
-  detail: string | Array<{ loc: string[]; msg: string; type: string }>
+  detail?: string | Array<{ loc: string[]; msg: string; type: string }>
+  error?: ApiErrorPayload
 }
 
 export type BranchStatus = "active" | "merged" | "abandoned"
 
 export type BranchRead = {
-  id: string
+  public_id: string
   name: string
   created_at: string
-  forked_from_checkpoint_id: string | null
-  parent_branch_id: string
-  head_checkpoint_id: string | null
+  forked_from_checkpoint_public_id: string | null
+  parent_branch_public_id: string
+  head_checkpoint_public_id: string | null
   status: BranchStatus
 }
 
 export type CheckpointRead = {
-  id: string
-  branch_id: string
-  conversation_id: string
+  public_id: string
+  branch_public_id: string
+  conversation_public_id: string
   title: string
   note: string | null
   created_at: string
   pins_snapshot: MemoryPinRead[]
   doc_snapshot: ProblemCustomerDocRead
   message_count: number
-  parent_checkpoint_id: string | null
+  parent_checkpoint_public_id: string | null
+  is_merge: boolean
 }
 
 export type ConversationBindingRead = {
-  conversation_id: string
-  branch_id: string
-  base_checkpoint_id: string | null
-  last_checkpoint_id: string | null
+  conversation_public_id: string
+  branch_public_id: string
+  base_checkpoint_public_id: string | null
+  last_checkpoint_public_id: string | null
 }
 
 export type PotentialImpactRead = {
@@ -383,18 +388,18 @@ export type OneOffMessageRead = {
 }
 
 export type OneOffSessionRead = {
-  id: string
+  public_id: string
   question: string
   messages: OneOffMessageRead[]
   potential_impacts: PotentialImpactRead[]
-  fork_checkpoint_id: string | null
-  conversation_id: string
+  fork_checkpoint_public_id: string | null
+  conversation_public_id: string
   created_at: string
 }
 
 export type IdeaHistoryBootstrapRead = {
   version: 1
-  main_branch_id: string
+  main_branch_public_id: string
   branches: BranchRead[]
   checkpoints: CheckpointRead[]
   conversation_bindings: ConversationBindingRead[]
@@ -473,3 +478,114 @@ export type SendOneOffMessageBody = {
 export type MergeBranchBody = {
   conversation_id: string
 }
+
+export type SourceType =
+  | "file_upload"
+  | "paste"
+  | "ai_memory_export"
+  | "chatgpt_export"
+  | "claude_export"
+  | "startup_notes"
+
+export type ExtractionJobStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+
+export type UploadUrlRequest = {
+  filename: string
+  content_type: string
+  conversation_id: string
+}
+
+export type UploadUrlResponse = {
+  source_item_id: string
+  upload_url: string
+  file_key: string
+}
+
+export type CreateSourceItemBody = {
+  conversation_id: string
+  source_type: SourceType
+  source_item_id?: string
+  file_key?: string
+  byte_size?: number
+  original_filename?: string
+  mime_type?: string
+  paste_text?: string
+  export_conversation_id?: string
+  origin_metadata?: Record<string, unknown>
+}
+
+export type EnqueueJobResponse = {
+  job_id: string
+  status: ExtractionJobStatus
+}
+
+export type ProposedPin = {
+  pin_type: "metric" | "note"
+  value?: string | null
+  label?: string | null
+  content?: string | null
+}
+
+export type ProposedDocSection = {
+  section: ChecklistSectionKey
+  done: boolean
+  summary: string
+}
+
+export type IngestionPreview = {
+  proposed_pins: ProposedPin[]
+  proposed_doc_sections: ProposedDocSection[]
+  summary: string
+  confidence: "high" | "medium" | "low"
+}
+
+export type ExtractionJobRead = {
+  public_id: string
+  project_public_id: string
+  source_item_public_id: string
+  status: ExtractionJobStatus
+  preview: IngestionPreview | null
+  failure_reason: string | null
+  attempt_count: number
+  model_used: string | null
+  applied_at: string | null
+  poll_interval_ms: number
+  created_at: string
+  updated_at: string
+}
+
+export type ApplyIngestionResponse = {
+  job_id: string
+  applied_at: string
+  pins_created: number
+  doc_sections_updated: number
+  memory_pins: MemoryPinRead[]
+  problem_customer_doc: ProblemCustomerDocRead
+}
+
+export type ExportConversationOption = {
+  id: string
+  title: string
+  message_count: number
+  transcript_markdown: string
+}
+
+export type ParseExportResponse = {
+  provider: "chatgpt" | "claude"
+  conversations: ExportConversationOption[]
+}
+
+export type ImportPromptResponse = {
+  provider: string
+  prompt_text: string
+  steps: string[]
+}
+
+export type ExportProvider = "chatgpt" | "claude"
+
+export type ImportPromptProvider = ExportProvider | "generic" | "ai_memory"

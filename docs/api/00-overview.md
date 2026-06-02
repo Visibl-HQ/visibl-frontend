@@ -21,8 +21,9 @@ A founder can:
 4. Start or resume a **conversation** per project
 5. Chat (streaming) with an AI that updates **memory pins** and a **problem/customer** doc checklist
 6. See sidebar state refresh from workspace + chat `done` events
+7. **Import context** — upload files, paste notes, or import ChatGPT/Claude exports; preview extraction, then apply to pins and the problem/customer doc
 
-**Not in v1 API:** git graph commits, multiple doc types, hosted public pages, pin archival, manual pin/doc edit APIs, file uploads.
+**Not in v1 API:** git graph commits, multiple doc types, hosted public pages, pin archival, manual pin/doc edit APIs.
 
 ## Environment (local)
 

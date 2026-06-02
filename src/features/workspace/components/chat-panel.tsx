@@ -14,6 +14,8 @@ type ChatPanelProps = {
   error?: string | null
   onSend: (content: string) => Promise<void>
   onExploreSeparately?: () => void
+  onOpenIngestion?: () => void
+  onImportFiles?: (files: File[]) => void | Promise<void>
   className?: string
 }
 
@@ -24,6 +26,8 @@ export function ChatPanel({
   error,
   onSend,
   onExploreSeparately,
+  onOpenIngestion,
+  onImportFiles,
   className,
 }: ChatPanelProps) {
   return (
@@ -45,11 +49,14 @@ export function ChatPanel({
       <ChatThread
         messages={messages}
         {...(activityLabel !== undefined ? { activityLabel } : {})}
+        {...(onOpenIngestion ? { onOpenIngestion } : {})}
       />
       <ChatComposer
         disabled={isStreaming}
         onSend={onSend}
         {...(onExploreSeparately ? { onExploreSeparately } : {})}
+        {...(onOpenIngestion ? { onOpenIngestion } : {})}
+        {...(onImportFiles ? { onImportFiles } : {})}
       />
     </section>
   )
