@@ -701,7 +701,8 @@ export function WorkspaceShell({
           companyMap:
             workspaceSlicesRef.current.companyMap || globals.slices.companyMap,
           artifactHub:
-            workspaceSlicesRef.current.artifactHub || globals.slices.artifactHub,
+            workspaceSlicesRef.current.artifactHub ||
+            globals.slices.artifactHub,
         }
         if (
           workspaceSlicesRef.current.companyMap &&
