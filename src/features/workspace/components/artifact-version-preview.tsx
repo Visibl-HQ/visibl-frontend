@@ -9,7 +9,7 @@
  * "unlock" affordances that route the founder to the exact next question.
  */
 
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { CircleHelp, MessageCircleQuestion, RefreshCw } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -25,12 +25,14 @@ import { cn } from "@/lib/utils"
 
 function SourceChip({ source }: { source: ArtifactSourceRef }) {
   const [expanded, setExpanded] = useState(false)
+  const summaryId = useId()
   return (
     <span className="inline-flex max-w-full flex-col">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
+        aria-controls={expanded ? summaryId : undefined}
         className={cn(
           "border-border/70 bg-background text-muted-foreground inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
           "hover:text-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
@@ -40,7 +42,10 @@ function SourceChip({ source }: { source: ArtifactSourceRef }) {
         <CircleHelp className="size-3 shrink-0" aria-hidden="true" />
       </button>
       {expanded && source.summary ? (
-        <span className="text-muted-foreground mt-1 text-[11px] leading-snug">
+        <span
+          id={summaryId}
+          className="text-muted-foreground mt-1 text-[11px] leading-snug"
+        >
           {source.summary}
         </span>
       ) : null}

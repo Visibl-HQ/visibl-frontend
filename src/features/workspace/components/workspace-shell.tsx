@@ -1185,7 +1185,9 @@ export function WorkspaceShell({
   )
 
   const refreshCaptureState = useCallback(async () => {
-    const captureData = await loadProjectCaptureData(projectPublicId)
+    const captureData = await loadProjectCaptureData(projectPublicId, {
+      forceRefresh: true,
+    })
     setMemoryPins(captureData.memoryPins)
     patchProjectGlobals({
       companyMap: captureData.companyMap,
@@ -2077,7 +2079,12 @@ function WorkspaceShellLayout({
                   }}
                   projectId={projectPublicId}
                   onGenerationComplete={onGenerationComplete}
-                  onAskInChat={() => {
+                  onAskInChat={(question) => {
+                    try {
+                      sessionStorage.setItem("visibl:chat-prefill", question)
+                    } catch {
+                      // best-effort prefill
+                    }
                     router.push(
                       conversationPath(username, projectSlug, navConversationId)
                     )

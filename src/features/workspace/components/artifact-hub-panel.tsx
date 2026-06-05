@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+
+import { narrativeLabelAt } from "@/features/workspace/lib/generation-events"
 import {
   ArrowRight,
   Layers3,
@@ -211,6 +213,11 @@ export function ArtifactHubPanel({
               void generation.generate(selectedArtifact.id)
             }
           }}
+          onRecheck={() => {
+            if (selectedArtifact) {
+              generation.recheck(selectedArtifact.id)
+            }
+          }}
           onAskInChat={onAskInChat}
           versionRefreshToken={versionRefreshToken}
           className="order-first lg:order-none"
@@ -227,8 +234,8 @@ function UnlockMeter({ artifact }: { artifact: ArtifactRead }) {
   }
   const total = artifact.minimum_draft_field_keys.length
   const satisfied = artifact.minimum_draft_satisfied_count
-  const missingKeys = artifact.minimum_draft_field_keys.filter(
-    (key) => !artifact.blockers.every((blocker) => blocker.field_key !== key)
+  const missingKeys = artifact.minimum_draft_field_keys.filter((key) =>
+    artifact.blockers.some((blocker) => blocker.field_key === key)
   )
   const nextKey = missingKeys[0]
   return (
@@ -268,6 +275,22 @@ function GenerationProgress({
   artifact: ArtifactRead
 }) {
   const topBlocker = artifact.blockers[0]
+  // The backend only reports 0 -> 10 -> 100, so the bar would sit frozen at
+  // 10% for the whole LLM run. Creep toward 85% on elapsed ticks instead and
+  // cycle the trust narrative on the same client interval (one tick = 2.5s).
+  const [elapsedTick, setElapsedTick] = useState(0)
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setElapsedTick((tick) => tick + 1)
+    }, 2500)
+    return () => window.clearInterval(interval)
+  }, [])
+  const creepProgress = Math.min(85, 10 + elapsedTick * 4)
+  const displayProgress = Math.max(state.progress, creepProgress, 5)
+  const displayLabel =
+    state.activityLabel && elapsedTick % 2 === 0
+      ? state.activityLabel
+      : narrativeLabelAt(elapsedTick)
   return (
     <div className="border-border/70 bg-background rounded-lg border p-4">
       <div className="flex items-center gap-2">
@@ -278,12 +301,12 @@ function GenerationProgress({
         <p className="text-sm font-medium">Drafting from your evidence</p>
       </div>
       <Progress
-        value={Math.max(state.progress, 5)}
+        value={displayProgress}
         className="mt-3 h-1.5"
         aria-hidden="true"
       />
       <p aria-live="polite" className="text-muted-foreground mt-2 text-xs">
-        {state.activityLabel ?? "Working…"}
+        {displayLabel}
       </p>
       {topBlocker ? (
         <p className="text-muted-foreground border-border/60 mt-3 border-t pt-2 text-xs">
@@ -302,6 +325,7 @@ function ArtifactDetailPanel({
   projectId,
   generationState,
   onGenerate,
+  onRecheck,
   onAskInChat,
   versionRefreshToken,
   className,
@@ -311,6 +335,7 @@ function ArtifactDetailPanel({
   projectId: string
   generationState: GenerationState | null
   onGenerate: () => void
+  onRecheck: () => void
   onAskInChat?: ((question: string) => void) | undefined
   versionRefreshToken: number
   className?: string | undefined
@@ -396,7 +421,18 @@ function ArtifactDetailPanel({
                 <RefreshCw className="size-3.5" aria-hidden="true" />
                 Try again
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 gap-1.5"
+                onClick={onRecheck}
+              >
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+                Check again
+              </Button>
+            )}
           </div>
         ) : displayedVersion ? (
           <div className="border-border/70 bg-background rounded-lg border p-4">
@@ -431,6 +467,7 @@ function ArtifactDetailPanel({
                 size="sm"
                 className="mt-4 gap-1.5"
                 onClick={onGenerate}
+                disabled={isInFlight}
               >
                 <RefreshCw className="size-3.5" aria-hidden="true" />
                 Regenerate draft
@@ -452,6 +489,7 @@ function ArtifactDetailPanel({
               size="sm"
               className="mt-3 w-full gap-1.5"
               onClick={onGenerate}
+              disabled={isInFlight}
             >
               <Sparkles className="size-3.5" aria-hidden="true" />
               Generate source-backed draft

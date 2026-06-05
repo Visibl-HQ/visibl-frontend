@@ -106,6 +106,9 @@ export function useArtifactGeneration({
   const [states, setStates] = useState<Record<string, GenerationState>>({})
   const controllersRef = useRef<Map<string, AbortController>>(new Map())
   const ticksRef = useRef<Map<string, number>>(new Map())
+  // Synchronous in-flight guard: two clicks in the same tick share the same
+  // `states` snapshot, so the phase check alone cannot stop a double submit.
+  const startingRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     const controllers = controllersRef.current
@@ -201,9 +204,13 @@ export function useArtifactGeneration({
 
   const generate = useCallback(
     async (artifactId: string) => {
-      if (IN_FLIGHT_PHASES.has(stateFor(artifactId).phase)) {
-        return // duplicate-click guard
+      if (
+        startingRef.current.has(artifactId) ||
+        IN_FLIGHT_PHASES.has(stateFor(artifactId).phase)
+      ) {
+        return // duplicate-click guard (sync ref + state phase)
       }
+      startingRef.current.add(artifactId)
       patchState(artifactId, {
         ...IDLE_STATE,
         phase: "starting",
@@ -247,6 +254,8 @@ export function useArtifactGeneration({
           activityLabel: null,
           error: describeGenerationError(error),
         })
+      } finally {
+        startingRef.current.delete(artifactId)
       }
     },
     [
@@ -257,6 +266,24 @@ export function useArtifactGeneration({
       projectId,
       stateFor,
     ]
+  )
+
+  /** Re-attach after a foreground timeout (the job kept running server-side). */
+  const recheck = useCallback(
+    (artifactId: string) => {
+      const jobId = stateFor(artifactId).jobId ?? rememberedJob(projectId, artifactId)
+      if (!jobId || IN_FLIGHT_PHASES.has(stateFor(artifactId).phase)) {
+        return
+      }
+      patchState(artifactId, {
+        phase: "running",
+        jobId,
+        error: null,
+        activityLabel: "Checking on your draft…",
+      })
+      void pollToCompletion(artifactId, jobId)
+    },
+    [patchState, pollToCompletion, projectId, stateFor]
   )
 
   /** Re-attach to a job started before navigation (call on detail open). */
@@ -288,5 +315,5 @@ export function useArtifactGeneration({
     [patchState]
   )
 
-  return { stateFor, generate, resume, dismiss }
+  return { stateFor, generate, resume, recheck, dismiss }
 }

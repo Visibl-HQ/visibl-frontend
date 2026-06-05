@@ -208,7 +208,7 @@ test("workspace refreshes pins and Company Map after review mutations", () => {
   const shell = read("src/features/workspace/components/workspace-shell.tsx")
 
   for (const contract of [
-    /const refreshCaptureState = useCallback[\s\S]*loadProjectCaptureData\(projectPublicId\)[\s\S]*patchProjectGlobals\(/,
+    /const refreshCaptureState = useCallback[\s\S]*loadProjectCaptureData\(projectPublicId, \{[\s\S]*forceRefresh: true,[\s\S]*patchProjectGlobals\(/,
     /handleConfirmPin[\s\S]*await confirmPin\(projectPublicId, pin.public_id\)[\s\S]*await refreshCaptureState\(\)/,
     /handleEditPin[\s\S]*await updatePin\(projectPublicId, pin.public_id[\s\S]*await refreshCaptureState\(\)/,
     /handleArchivePin[\s\S]*await archivePin\(projectPublicId, pin.public_id\)[\s\S]*await refreshCaptureState\(\)/,
