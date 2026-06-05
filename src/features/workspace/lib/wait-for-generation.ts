@@ -39,7 +39,8 @@ export class GenerationFailedError extends Error {
 
   constructor(safeError: string | null) {
     const message =
-      safeError ?? "Generation failed safely. The current draft was not changed."
+      safeError ??
+      "Generation failed safely. The current draft was not changed."
     super(message)
     this.name = "GenerationFailedError"
     this.safeError = message

@@ -33,5 +33,8 @@ export function activityLabelForJob(job: GenerationJobSnapshot): string {
 }
 
 export function narrativeLabelAt(tick: number): string {
-  return DRAFTING_NARRATIVE[Math.floor(tick) % DRAFTING_NARRATIVE.length] ?? "Working…"
+  return (
+    DRAFTING_NARRATIVE[Math.floor(tick) % DRAFTING_NARRATIVE.length] ??
+    "Working…"
+  )
 }

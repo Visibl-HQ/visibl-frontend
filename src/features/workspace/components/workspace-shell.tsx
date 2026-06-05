@@ -1646,8 +1646,10 @@ export function WorkspaceShell({
       <WorkspaceShellLayout
         username={username}
         projectSlug={projectSlug}
+        projectPublicId={projectPublicId}
         workspaceSection={workspaceSection}
         navConversationId={navConversationId}
+        onGenerationComplete={refreshCaptureState}
         workspace={workspace}
         workspaceSlices={workspaceSlices}
         conversationId={conversationId}
@@ -1749,8 +1751,10 @@ export function WorkspaceShell({
 type WorkspaceShellLayoutProps = {
   username: string
   projectSlug: string
+  projectPublicId: string
   workspaceSection: ReturnType<typeof resolveProjectWorkspaceSection>
   navConversationId: string
+  onGenerationComplete: () => void | Promise<void>
   workspace: WorkspaceRead
   workspaceSlices: WorkspaceSliceState
   conversationId: string
@@ -1833,8 +1837,10 @@ function WorkspaceSectionLoading({ label }: { label: string }) {
 function WorkspaceShellLayout({
   username,
   projectSlug,
+  projectPublicId,
   workspaceSection,
   navConversationId,
+  onGenerationComplete,
   workspace,
   workspaceSlices,
   conversationId,
@@ -2068,6 +2074,13 @@ function WorkspaceShellLayout({
                   selectedArtifactId={selectedArtifact?.id ?? null}
                   onSelectArtifact={(artifact) => {
                     setSelectedArtifactId(artifact.id)
+                  }}
+                  projectId={projectPublicId}
+                  onGenerationComplete={onGenerationComplete}
+                  onAskInChat={() => {
+                    router.push(
+                      conversationPath(username, projectSlug, navConversationId)
+                    )
                   }}
                 />
               ) : (
