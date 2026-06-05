@@ -228,12 +228,14 @@ export type CompanyMapCandidateRead = {
   updated_at: string
 }
 
+// Honest internal labels (goal-011): exports and share-safety do not exist
+// yet, so readiness never claims "Ready for PPT" / "Ready to share".
 export type ArtifactReadiness =
   | "Collecting"
   | "Draftable"
-  | "Ready for doc"
-  | "Ready for PPT"
-  | "Ready to share"
+  | "Version-ready"
+  | "Source-ready"
+  | "Share review required"
 
 export type SourceStrengthLabel =
   | "Missing"
@@ -277,6 +279,111 @@ export type ArtifactVersionState = {
   detail: string | null
 }
 
+export type ArtifactSourceRef = {
+  id: string
+  label: string
+  source_type: string
+  pin_public_id: string | null
+  message_public_id: string | null
+  document_id: string | null
+  document_label: string | null
+  summary: string
+}
+
+export type ArtifactContentSection = {
+  id: string
+  label: string
+  field_key: string
+  value: string
+  support_label: FieldSupportLabel
+  source_refs: ArtifactSourceRef[]
+  caveats: string[]
+}
+
+export type ArtifactDeckSlide = {
+  id: string
+  title: string
+  section_ids: string[]
+  speaker_notes: string
+}
+
+export type ArtifactGenerationMetadata = {
+  template_version: string
+  prompt_version: string
+  schema_version: number
+  model: string
+  generator: "llm" | "deterministic_fallback"
+  fallback_reason?: string
+  source_snapshot_schema_version: number
+}
+
+export type ArtifactVersionContent = {
+  schema_version: number
+  artifact_id: string
+  title: string
+  summary: string
+  source_snapshot_id: string
+  source_scope: string
+  sections: ArtifactContentSection[]
+  slides?: ArtifactDeckSlide[]
+  caveats: string[]
+  generation_metadata: ArtifactGenerationMetadata
+}
+
+export type ArtifactVersionRead = {
+  public_id: string
+  artifact_id: string
+  version_number: number
+  created_at: string
+  dependency_hash: string
+  is_stale: boolean
+  stale_reason: string | null
+  content_schema_version: number
+  content: ArtifactVersionContent
+  rendered_markdown: string | null
+  generation_label: string
+  share_safety_status: string
+  created_by_kind: string
+}
+
+export type ArtifactVersionPage = {
+  items: ArtifactVersionRead[]
+  next_cursor: string | null
+}
+
+export type GenerationJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+
+export type GenerationJobEventRead = {
+  event_type: string
+  message: string
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export type GenerationJobRead = {
+  public_id: string
+  project_public_id: string
+  job_type: string
+  status: GenerationJobStatus
+  artifact_id: string | null
+  attempt_count: number
+  progress: number
+  poll_interval_ms: number
+  safe_error: string | null
+  metadata_json: Record<string, unknown>
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+  updated_at: string
+  result_version: ArtifactVersionRead | null
+  events: GenerationJobEventRead[]
+}
+
 export type ArtifactRead = {
   id: string
   name: string
@@ -286,11 +393,16 @@ export type ArtifactRead = {
   blocker_count: number
   stale_status: ArtifactStaleStatus
   version_state: ArtifactVersionState | null
+  current_version: ArtifactVersionRead | null
+  can_create_version: boolean
+  create_version_disabled_reason: string | null
+  minimum_draft_field_keys: string[]
+  minimum_draft_satisfied_count: number
   next_best_action: NextBestAction
   blockers: ArtifactBlockerRead[]
   required_field_keys: string[]
   evidence: EvidenceRead[]
-  generation_disabled_reason: string
+  generation_disabled_reason: string | null
   export_disabled_reason: string
 }
 

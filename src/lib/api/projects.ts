@@ -2,12 +2,15 @@ import { apiJson } from "@/lib/api/client"
 import type {
   ArtifactHubRead,
   ArtifactRead,
+  ArtifactVersionPage,
+  ArtifactVersionRead,
   CompanyMapCandidateRead,
   CompanyMapRead,
   ConversationRead,
   CreateConversationBody,
   CreateProjectBody,
   CursorPage,
+  GenerationJobRead,
   MemoryPinRead,
   MemoryPinUpdate,
   ProjectRead,
@@ -189,6 +192,58 @@ export async function getArtifact(
   artifactId: string
 ): Promise<ArtifactRead> {
   return apiJson<ArtifactRead>(`/projects/${projectId}/artifacts/${artifactId}`)
+}
+
+export async function generateArtifact(
+  projectId: string,
+  artifactId: string,
+  body?: { idempotency_key?: string }
+): Promise<GenerationJobRead> {
+  return apiJson<GenerationJobRead>(
+    `/projects/${projectId}/artifacts/${artifactId}/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }
+  )
+}
+
+export async function getGenerationJob(
+  projectId: string,
+  artifactId: string,
+  jobId: string
+): Promise<GenerationJobRead> {
+  return apiJson<GenerationJobRead>(
+    `/projects/${projectId}/artifacts/${artifactId}/generation-jobs/${jobId}`
+  )
+}
+
+export async function listArtifactVersions(
+  projectId: string,
+  artifactId: string,
+  params?: { limit?: number; cursor?: string | null }
+): Promise<ArtifactVersionPage> {
+  const searchParams = new URLSearchParams()
+  if (params?.limit) {
+    searchParams.set("limit", String(params.limit))
+  }
+  if (params?.cursor) {
+    searchParams.set("cursor", params.cursor)
+  }
+  const query = searchParams.toString()
+  return apiJson<ArtifactVersionPage>(
+    `/projects/${projectId}/artifacts/${artifactId}/versions${query ? `?${query}` : ""}`
+  )
+}
+
+export async function getArtifactVersion(
+  projectId: string,
+  artifactId: string,
+  versionId: string
+): Promise<ArtifactVersionRead> {
+  return apiJson<ArtifactVersionRead>(
+    `/projects/${projectId}/artifacts/${artifactId}/versions/${versionId}`
+  )
 }
 
 export async function listConversations(

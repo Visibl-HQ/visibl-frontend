@@ -43,10 +43,13 @@ function sequenceGetJob(sequence: GenerationJobSnapshot[]) {
   const calls: number[] = []
   return {
     calls,
-    getJob: async () => {
+    getJob: async (): Promise<GenerationJobSnapshot> => {
       calls.push(index)
       const item = sequence[Math.min(index, sequence.length - 1)]
       index += 1
+      if (!item) {
+        throw new Error("test sequence exhausted")
+      }
       return item
     },
   }
@@ -59,7 +62,11 @@ test("polls queued -> running -> succeeded and returns the result version", asyn
   const { getJob, calls } = sequenceGetJob([
     job({ status: "queued" }),
     job({ status: "running", progress: 10 }),
-    job({ status: "succeeded", progress: 100, result_version: version as never }),
+    job({
+      status: "succeeded",
+      progress: 100,
+      result_version: version as never,
+    }),
   ])
   const seen: string[] = []
 
@@ -81,7 +88,10 @@ test("failed job throws GenerationFailedError carrying the safe error", async ()
   ])
 
   await assert.rejects(
-    waitForGeneration("proj", "one_pager", "job-1", { getJob, sleep: instantSleep }),
+    waitForGeneration("proj", "one_pager", "job-1", {
+      getJob,
+      sleep: instantSleep,
+    }),
     (error: unknown) => {
       assert.ok(error instanceof GenerationFailedError)
       assert.equal(error.safeError, "Generation failed safely.")
@@ -93,7 +103,10 @@ test("failed job throws GenerationFailedError carrying the safe error", async ()
 test("canceled job throws GenerationCanceledError", async () => {
   const { getJob } = sequenceGetJob([job({ status: "canceled" })])
   await assert.rejects(
-    waitForGeneration("proj", "one_pager", "job-1", { getJob, sleep: instantSleep }),
+    waitForGeneration("proj", "one_pager", "job-1", {
+      getJob,
+      sleep: instantSleep,
+    }),
     GenerationCanceledError
   )
 })
@@ -159,9 +172,14 @@ test("honors server poll_interval_ms between polls", async () => {
 })
 
 test("succeeded without a result version is treated as a failure, not silence", async () => {
-  const { getJob } = sequenceGetJob([job({ status: "succeeded", result_version: null })])
+  const { getJob } = sequenceGetJob([
+    job({ status: "succeeded", result_version: null }),
+  ])
   await assert.rejects(
-    waitForGeneration("proj", "one_pager", "job-1", { getJob, sleep: instantSleep }),
+    waitForGeneration("proj", "one_pager", "job-1", {
+      getJob,
+      sleep: instantSleep,
+    }),
     GenerationFailedError
   )
 })
@@ -173,7 +191,8 @@ test("activity labels prefer server event messages and fall back to trust narrat
       events: [
         {
           event_type: "running",
-          message: "Reading only your confirmed sources and drafting from evidence.",
+          message:
+            "Reading only your confirmed sources and drafting from evidence.",
           payload: {},
           created_at: "2026-06-05T00:00:00Z",
         },
@@ -184,5 +203,8 @@ test("activity labels prefer server event messages and fall back to trust narrat
 
   const fallback = activityLabelForJob(job({ status: "running", events: [] }))
   assert.ok(fallback.length > 0)
-  assert.ok(DRAFTING_NARRATIVE.length >= 3, "trust narrative needs cycling copy")
+  assert.ok(
+    DRAFTING_NARRATIVE.length >= 3,
+    "trust narrative needs cycling copy"
+  )
 })
