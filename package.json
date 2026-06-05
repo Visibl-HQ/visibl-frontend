@@ -17,7 +17,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:generation": "node --import tsx --test scripts/artifact-generation.test.ts",
+    "test": "pnpm test:workspace && pnpm test:generation"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -53,6 +55,7 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "shadcn": "^4.7.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   },
   "lint-staged": {
