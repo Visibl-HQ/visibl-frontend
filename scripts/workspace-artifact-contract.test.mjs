@@ -8,16 +8,65 @@ function read(path) {
   return readFileSync(new URL(path, root), "utf8")
 }
 
-test("workspace exposes Company Map and Artifact Hub as primary modes", () => {
+test("workspace exposes Company Map, Artifact Hub, and Hosted Page as primary modes", () => {
   const shell = read("src/features/workspace/components/workspace-shell.tsx")
+  const nav = read(
+    "src/features/workspace/components/project-workspace-nav.tsx"
+  )
 
   assert.match(shell, /Company Map/)
   assert.match(shell, /Artifact Hub/)
+  assert.match(nav, /Hosted Page/)
   assert.match(shell, /workspaceSection === "company-map"/)
   assert.match(shell, /workspaceSection === "artifacts"/)
+  assert.match(shell, /workspaceSection === "hosted-page"/)
   assert.match(shell, /<CompanyMapPanel/)
   assert.match(shell, /<ArtifactHubPanel/)
+  assert.match(shell, /<HostedPagePanel/)
   assert.match(shell, /<WorkspaceContextSidebarContent/)
+})
+
+test("hosted page UI uses backend policy, public projection, analytics, and feedback actions", () => {
+  const panel = read(
+    "src/features/hosted-page/components/hosted-page-panel.tsx"
+  )
+  const publicPage = read(
+    "src/features/hosted-page/components/public-hosted-page.tsx"
+  )
+  const api = read("src/lib/api/hosted-pages.ts")
+  const authProvider = read("src/features/auth/components/auth-provider.tsx")
+
+  for (const contract of [
+    /previewHostedPage/,
+    /publishHostedPage/,
+    /archiveHostedPage/,
+    /getHostedPageAnalytics/,
+    /listHostedPageFeedback/,
+    /linkHostedPageFeedback/,
+    /share_safety/,
+    /Create candidate/,
+    /Convert to question/,
+    /Dismiss/,
+    /action: "dismiss"/,
+    /Copy URL/,
+    /searchParams\.set\("token", shareToken\)/,
+    /needsPrivateTokenRotation/,
+    /feedbackFieldKeys/,
+    /Choose field/,
+  ]) {
+    assert.match(panel, contract)
+  }
+  assert.doesNotMatch(panel, /Token: \{shareToken\}/)
+  assert.match(panel, /if \(needsPrivateTokenRotation\)[\s\S]*return null/)
+  assert.match(authProvider, /PUBLIC_ROUTE_PREFIXES = \["\/hosted\/"\]/)
+
+  assert.match(api, /\/hosted\/\$\{encodeURIComponent\(identifier\)\}/)
+  assert.match(publicPage, /HostedPageEmailGate/)
+  assert.match(publicPage, /safeContactHref/)
+  assert.match(publicPage, /gate-email/)
+  assert.match(publicPage, /recordHostedPageEvent/)
+  assert.match(publicPage, /submitHostedPageFeedback/)
+  assert.doesNotMatch(publicPage, /getCompanyMap|getArtifact|getWorkspace/)
 })
 
 test("artifact cards show required readiness signals", () => {

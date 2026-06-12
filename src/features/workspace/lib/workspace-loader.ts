@@ -33,7 +33,10 @@ function cachedProjectRequest<T>(
   return getOrCreateRequest(key, action)
 }
 
-export type NonChatWorkspaceSection = "company-map" | "artifacts"
+export type NonChatWorkspaceSection =
+  | "company-map"
+  | "artifacts"
+  | "hosted-page"
 
 export type WorkspaceSliceState = {
   companyMap: boolean
@@ -158,14 +161,53 @@ export async function loadProjectSectionGlobals(
     }
   }
 
-  const [project, artifactHub] = await Promise.all([
+  if (section === "artifacts") {
+    const [project, artifactHub] = await Promise.all([
+      measureWorkspaceTiming(
+        "project core",
+        () =>
+          cachedProjectRequest(`project:${projectPublicId}`, () =>
+            getProject(projectPublicId)
+          ),
+        `${projectPublicId}:artifacts`
+      ),
+      measureWorkspaceTiming(
+        "artifacts",
+        () =>
+          cachedProjectRequest(`artifacts:${projectPublicId}`, () =>
+            listArtifacts(projectPublicId)
+          ),
+        projectPublicId
+      ),
+    ])
+
+    return {
+      project,
+      companyMap: createEmptyCompanyMap(projectPublicId),
+      artifactHub,
+      slices: {
+        companyMap: false,
+        artifactHub: true,
+      },
+    }
+  }
+
+  const [project, companyMap, artifactHub] = await Promise.all([
     measureWorkspaceTiming(
       "project core",
       () =>
         cachedProjectRequest(`project:${projectPublicId}`, () =>
           getProject(projectPublicId)
         ),
-      `${projectPublicId}:artifacts`
+      `${projectPublicId}:hosted-page`
+    ),
+    measureWorkspaceTiming(
+      "company map",
+      () =>
+        cachedProjectRequest(`company-map:${projectPublicId}`, () =>
+          getCompanyMap(projectPublicId)
+        ),
+      projectPublicId
     ),
     measureWorkspaceTiming(
       "artifacts",
@@ -179,10 +221,10 @@ export async function loadProjectSectionGlobals(
 
   return {
     project,
-    companyMap: createEmptyCompanyMap(projectPublicId),
+    companyMap,
     artifactHub,
     slices: {
-      companyMap: false,
+      companyMap: true,
       artifactHub: true,
     },
   }

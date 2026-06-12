@@ -1,10 +1,15 @@
-export type ProjectWorkspaceSection = "chat" | "company-map" | "artifacts"
+export type ProjectWorkspaceSection =
+  | "chat"
+  | "company-map"
+  | "artifacts"
+  | "hosted-page"
 
 export {
   artifactsPath,
   companyMapPath,
   conversationPath,
   draftConversationPath,
+  hostedPagePath,
   projectRootPath,
 } from "@/lib/routing/paths"
 
@@ -34,6 +39,10 @@ export function resolveProjectWorkspaceSection(
     return "artifacts"
   }
 
+  if (rest.startsWith("hosted-page")) {
+    return "hosted-page"
+  }
+
   return "chat"
 }
 
@@ -61,6 +70,10 @@ export function resolveLegacyProjectWorkspaceSection(
 
   if (rest.startsWith("artifacts")) {
     return "artifacts"
+  }
+
+  if (rest.startsWith("hosted-page")) {
+    return "hosted-page"
   }
 
   return "chat"

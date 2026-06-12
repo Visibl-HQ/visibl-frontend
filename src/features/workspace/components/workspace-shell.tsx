@@ -49,6 +49,7 @@ import { IngestionPreviewDialog } from "@/features/ingestion/components/ingestio
 import { useIngestionFlow } from "@/features/ingestion/hooks/use-ingestion-flow"
 import { ArtifactHubPanel } from "@/features/workspace/components/artifact-hub-panel"
 import { CompanyMapPanel } from "@/features/workspace/components/company-map-panel"
+import { HostedPagePanel } from "@/features/hosted-page/components/hosted-page-panel"
 import { CheckpointToolbar } from "@/features/idea-history/components/checkpoint-toolbar"
 import {
   IdeaHistoryProvider,
@@ -189,13 +190,21 @@ function sliceMessagesForBranchView(
 function isNonChatWorkspaceSection(
   section: ReturnType<typeof resolveProjectWorkspaceSection>
 ): section is NonChatWorkspaceSection {
-  return section === "company-map" || section === "artifacts"
+  return (
+    section === "company-map" ||
+    section === "artifacts" ||
+    section === "hosted-page"
+  )
 }
 
 function hasWorkspaceSlice(
   slices: WorkspaceSliceState,
   section: NonChatWorkspaceSection
 ): boolean {
+  if (section === "hosted-page") {
+    return slices.companyMap && slices.artifactHub
+  }
+
   return section === "company-map" ? slices.companyMap : slices.artifactHub
 }
 
@@ -796,6 +805,10 @@ export function WorkspaceShell({
 
   useEffect(() => {
     if (!workspace || !isNonChatWorkspaceSection(workspaceSection)) {
+      return
+    }
+
+    if (workspaceSection === "hosted-page") {
       return
     }
 
@@ -2096,6 +2109,23 @@ function WorkspaceShellLayout({
                     loadingWorkspaceSection === "artifacts"
                       ? "Loading Artifact Hub"
                       : "Preparing Artifact Hub"
+                  }
+                />
+              )
+            ) : null}
+            {workspaceSection === "hosted-page" ? (
+              workspaceSlices.companyMap && workspaceSlices.artifactHub ? (
+                <HostedPagePanel
+                  projectId={projectPublicId}
+                  artifactHub={workspace.artifact_hub}
+                  companyMap={workspace.company_map}
+                />
+              ) : (
+                <WorkspaceSectionLoading
+                  label={
+                    loadingWorkspaceSection === "hosted-page"
+                      ? "Loading Hosted Page"
+                      : "Preparing Hosted Page"
                   }
                 />
               )

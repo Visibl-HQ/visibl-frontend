@@ -67,6 +67,17 @@ function storageKey(projectId: string, artifactId: string): string {
   return `visibl:generation:${projectId}:${artifactId}`
 }
 
+function idempotencyStorageKey(projectId: string, artifactId: string): string {
+  return `visibl:generation-idempotency:${projectId}:${artifactId}`
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 function rememberJob(projectId: string, artifactId: string, jobId: string) {
   try {
     sessionStorage.setItem(storageKey(projectId, artifactId), jobId)
@@ -88,6 +99,29 @@ function rememberedJob(projectId: string, artifactId: string): string | null {
     return sessionStorage.getItem(storageKey(projectId, artifactId))
   } catch {
     return null
+  }
+}
+
+function pendingIdempotencyKey(projectId: string, artifactId: string): string {
+  try {
+    const key = idempotencyStorageKey(projectId, artifactId)
+    const existing = sessionStorage.getItem(key)
+    if (existing) {
+      return existing
+    }
+    const created = newIdempotencyKey()
+    sessionStorage.setItem(key, created)
+    return created
+  } catch {
+    return newIdempotencyKey()
+  }
+}
+
+function forgetPendingIdempotencyKey(projectId: string, artifactId: string) {
+  try {
+    sessionStorage.removeItem(idempotencyStorageKey(projectId, artifactId))
+  } catch {
+    // ignore
   }
 }
 
@@ -217,10 +251,12 @@ export function useArtifactGeneration({
         activityLabel: "Snapshotting your sources…",
       })
       try {
+        const idempotencyKey = pendingIdempotencyKey(projectId, artifactId)
         const job = await generateArtifact(projectId, artifactId, {
-          idempotency_key: crypto.randomUUID(),
+          idempotency_key: idempotencyKey,
         })
         rememberJob(projectId, artifactId, job.public_id)
+        forgetPendingIdempotencyKey(projectId, artifactId)
         handleJobUpdate(artifactId, job)
         if (job.status === "succeeded" && job.result_version) {
           // Inline fallback path completed in-request.
@@ -240,6 +276,7 @@ export function useArtifactGeneration({
         }
         if (job.status === "failed") {
           forgetJob(projectId, artifactId)
+          forgetPendingIdempotencyKey(projectId, artifactId)
           patchState(artifactId, {
             phase: "failed",
             activityLabel: null,
@@ -271,7 +308,8 @@ export function useArtifactGeneration({
   /** Re-attach after a foreground timeout (the job kept running server-side). */
   const recheck = useCallback(
     (artifactId: string) => {
-      const jobId = stateFor(artifactId).jobId ?? rememberedJob(projectId, artifactId)
+      const jobId =
+        stateFor(artifactId).jobId ?? rememberedJob(projectId, artifactId)
       if (!jobId || IN_FLIGHT_PHASES.has(stateFor(artifactId).phase)) {
         return
       }

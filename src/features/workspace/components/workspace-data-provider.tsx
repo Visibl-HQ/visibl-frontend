@@ -32,6 +32,10 @@ function hasSectionSlice(
   slices: WorkspaceSliceState,
   section: NonChatWorkspaceSection
 ): boolean {
+  if (section === "hosted-page") {
+    return slices.companyMap && slices.artifactHub
+  }
+
   return section === "company-map" ? slices.companyMap : slices.artifactHub
 }
 
