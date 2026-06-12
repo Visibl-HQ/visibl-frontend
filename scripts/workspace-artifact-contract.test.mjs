@@ -8,15 +8,65 @@ function read(path) {
   return readFileSync(new URL(path, root), "utf8")
 }
 
-test("workspace exposes Company Map and Artifact Hub as primary modes", () => {
+test("workspace exposes Company Map, Artifact Hub, and Hosted Page as primary modes", () => {
   const shell = read("src/features/workspace/components/workspace-shell.tsx")
+  const nav = read(
+    "src/features/workspace/components/project-workspace-nav.tsx"
+  )
 
   assert.match(shell, /Company Map/)
   assert.match(shell, /Artifact Hub/)
-  assert.match(shell, /role="tablist"/)
+  assert.match(nav, /Hosted Page/)
+  assert.match(shell, /workspaceSection === "company-map"/)
+  assert.match(shell, /workspaceSection === "artifacts"/)
+  assert.match(shell, /workspaceSection === "hosted-page"/)
   assert.match(shell, /<CompanyMapPanel/)
   assert.match(shell, /<ArtifactHubPanel/)
+  assert.match(shell, /<HostedPagePanel/)
   assert.match(shell, /<WorkspaceContextSidebarContent/)
+})
+
+test("hosted page UI uses backend policy, public projection, analytics, and feedback actions", () => {
+  const panel = read(
+    "src/features/hosted-page/components/hosted-page-panel.tsx"
+  )
+  const publicPage = read(
+    "src/features/hosted-page/components/public-hosted-page.tsx"
+  )
+  const api = read("src/lib/api/hosted-pages.ts")
+  const authProvider = read("src/features/auth/components/auth-provider.tsx")
+
+  for (const contract of [
+    /previewHostedPage/,
+    /publishHostedPage/,
+    /archiveHostedPage/,
+    /getHostedPageAnalytics/,
+    /listHostedPageFeedback/,
+    /linkHostedPageFeedback/,
+    /share_safety/,
+    /Create candidate/,
+    /Convert to question/,
+    /Dismiss/,
+    /action: "dismiss"/,
+    /Copy URL/,
+    /searchParams\.set\("token", shareToken\)/,
+    /needsPrivateTokenRotation/,
+    /feedbackFieldKeys/,
+    /Choose field/,
+  ]) {
+    assert.match(panel, contract)
+  }
+  assert.doesNotMatch(panel, /Token: \{shareToken\}/)
+  assert.match(panel, /if \(needsPrivateTokenRotation\)[\s\S]*return null/)
+  assert.match(authProvider, /PUBLIC_ROUTE_PREFIXES = \["\/hosted\/"\]/)
+
+  assert.match(api, /\/hosted\/\$\{encodeURIComponent\(identifier\)\}/)
+  assert.match(publicPage, /HostedPageEmailGate/)
+  assert.match(publicPage, /safeContactHref/)
+  assert.match(publicPage, /gate-email/)
+  assert.match(publicPage, /recordHostedPageEvent/)
+  assert.match(publicPage, /submitHostedPageFeedback/)
+  assert.doesNotMatch(publicPage, /getCompanyMap|getArtifact|getWorkspace/)
 })
 
 test("artifact cards show required readiness signals", () => {
@@ -34,8 +84,40 @@ test("artifact cards show required readiness signals", () => {
   }
 
   assert.match(hub, /data-testid="artifact-detail"/)
-  assert.match(hub, /Preview placeholder/)
-  assert.match(hub, /Generation\/export disabled/)
+  // goal-011 generation surface: CTA, in-flight, resume, honest-draft framing
+  assert.match(hub, /Generate source-backed draft/)
+  assert.match(hub, /useArtifactGeneration/)
+  assert.match(hub, /generation.resume\(/)
+  assert.match(hub, /Drafting…/)
+  assert.match(hub, /aria-live="polite"/)
+  assert.match(hub, /<ArtifactVersionPreview/)
+  assert.match(hub, /<ArtifactVersionHistory/)
+  assert.match(hub, /can_create_version/)
+  assert.match(hub, /Needs evidence before drafting/)
+})
+
+test("generation poller runs to terminal state, never single-poll", () => {
+  const poller = read("src/features/workspace/lib/wait-for-generation.ts")
+
+  assert.match(poller, /for \(;;\)/)
+  assert.match(poller, /status === "succeeded"/)
+  assert.match(poller, /status === "failed"/)
+  assert.match(poller, /status === "canceled"/)
+  assert.match(poller, /GenerationTimeoutError/)
+  assert.match(poller, /poll_interval_ms/)
+})
+
+test("version preview keeps the evidence trail and honest gaps visible", () => {
+  const preview = read(
+    "src/features/workspace/components/artifact-version-preview.tsx"
+  )
+
+  assert.match(preview, /SupportBadge/)
+  assert.match(preview, /source_refs/)
+  assert.match(preview, /caveats/)
+  assert.match(preview, /Internal draft/)
+  assert.match(preview, /Unlock this section in chat/)
+  assert.match(preview, /sections are[\s\S]*source-backed/)
 })
 
 test("company map and inspector keep blockers and contradictions visible", () => {
@@ -115,7 +197,7 @@ test("candidate queue exposes review actions, audit trail, and source affordance
   )
   assert.match(
     shell,
-    /handleEditReplaceCandidate[\s\S]*editAcceptCandidate\(projectId, candidate\.id, value,[\s\S]*allow_replace: true[\s\S]*expected_revision_id: expectedRevisionId/
+    /handleEditReplaceCandidate[\s\S]*editAcceptCandidate\(projectPublicId, candidate\.public_id, value,[\s\S]*allow_replace: true[\s\S]*expected_revision_id: expectedRevisionId/
   )
   assert.match(
     candidates,
@@ -129,10 +211,10 @@ test("stale candidate conflicts refresh current revisions before replacement ret
   const shell = read("src/features/workspace/components/workspace-shell.tsx")
 
   for (const contract of [
-    /handleAcceptCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
-    /handleReplaceCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
-    /handleEditAcceptCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
-    /handleEditReplaceCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.id\)/,
+    /handleAcceptCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.public_id\)/,
+    /handleReplaceCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.public_id\)/,
+    /handleEditAcceptCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.public_id\)/,
+    /handleEditReplaceCandidate[\s\S]*actionError instanceof ApiError && actionError\.status === 409[\s\S]*await refreshCaptureState\(\)[\s\S]*setStaleCandidateId\(candidate\.public_id\)/,
   ]) {
     assert.match(shell, contract)
   }
@@ -175,17 +257,16 @@ test("workspace refreshes pins and Company Map after review mutations", () => {
   const shell = read("src/features/workspace/components/workspace-shell.tsx")
 
   for (const contract of [
-    /const refreshCaptureState = useCallback[\s\S]*listPins\(projectId\)[\s\S]*getCompanyMap\(projectId\)[\s\S]*listArtifacts\(projectId\)/,
-    /refreshCaptureState[\s\S]*artifact_hub: nextArtifactHub/,
-    /handleConfirmPin[\s\S]*await confirmPin\(projectId, pin.id\)[\s\S]*await refreshCaptureState\(\)/,
-    /handleEditPin[\s\S]*await updatePin\(projectId, pin.id[\s\S]*await refreshCaptureState\(\)/,
-    /handleArchivePin[\s\S]*await archivePin\(projectId, pin.id\)[\s\S]*await refreshCaptureState\(\)/,
-    /handlePromotePin[\s\S]*await promotePin\(projectId, pin.id\)[\s\S]*await refreshCaptureState\(\)/,
-    /handleAcceptCandidate[\s\S]*await acceptCandidate\(projectId, candidate.id\)[\s\S]*await refreshCaptureState\(\)/,
-    /handleEditAcceptCandidate[\s\S]*await editAcceptCandidate\(projectId, candidate.id, value\)[\s\S]*await refreshCaptureState\(\)/,
-    /handleRejectCandidate[\s\S]*await rejectCandidate\(projectId, candidate.id\)[\s\S]*await refreshCaptureState\(\)/,
-    /handleArchiveCandidate[\s\S]*await archiveCandidate\(projectId, candidate.id\)[\s\S]*await refreshCaptureState\(\)/,
-    /handleClarifyCandidate[\s\S]*await clarifyCandidate\(projectId, candidate.id\)[\s\S]*await refreshCaptureState\(\)/,
+    /const refreshCaptureState = useCallback[\s\S]*loadProjectCaptureData\(projectPublicId, \{[\s\S]*forceRefresh: true,[\s\S]*patchProjectGlobals\(/,
+    /handleConfirmPin[\s\S]*await confirmPin\(projectPublicId, pin.public_id\)[\s\S]*await refreshCaptureState\(\)/,
+    /handleEditPin[\s\S]*await updatePin\(projectPublicId, pin.public_id[\s\S]*await refreshCaptureState\(\)/,
+    /handleArchivePin[\s\S]*await archivePin\(projectPublicId, pin.public_id\)[\s\S]*await refreshCaptureState\(\)/,
+    /handlePromotePin[\s\S]*await promotePin\(projectPublicId, pin.public_id\)[\s\S]*await refreshCaptureState\(\)/,
+    /handleAcceptCandidate[\s\S]*await acceptCandidate\(projectPublicId, candidate.public_id\)[\s\S]*await refreshCaptureState\(\)/,
+    /handleEditAcceptCandidate[\s\S]*await editAcceptCandidate\(projectPublicId, candidate.public_id, value\)[\s\S]*await refreshCaptureState\(\)/,
+    /handleRejectCandidate[\s\S]*await rejectCandidate\(projectPublicId, candidate.public_id\)[\s\S]*await refreshCaptureState\(\)/,
+    /handleArchiveCandidate[\s\S]*await archiveCandidate\(projectPublicId, candidate.public_id\)[\s\S]*await refreshCaptureState\(\)/,
+    /handleClarifyCandidate[\s\S]*await clarifyCandidate\(projectPublicId, candidate.public_id\)[\s\S]*await refreshCaptureState\(\)/,
   ]) {
     assert.match(shell, contract)
   }
@@ -197,6 +278,10 @@ test("workspace copy does not overclaim investor readiness", () => {
     "src/features/workspace/components/company-map-panel.tsx",
     "src/features/workspace/components/artifact-hub-panel.tsx",
     "src/features/workspace/components/artifact-inspector.tsx",
+    "src/features/workspace/components/artifact-version-preview.tsx",
+    "src/features/workspace/components/artifact-deck-preview.tsx",
+    "src/features/workspace/components/artifact-version-history.tsx",
+    "src/features/workspace/lib/generation-events.ts",
   ]
 
   for (const file of files) {

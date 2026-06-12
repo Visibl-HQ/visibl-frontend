@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Building2, FileStack, MessageSquare } from "lucide-react"
+import { Building2, FileStack, Globe2, MessageSquare } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   artifactsPath,
   companyMapPath,
   conversationPath,
+  hostedPagePath,
   resolveProjectWorkspaceSection,
   type ProjectWorkspaceSection,
 } from "@/features/workspace/lib/workspace-routing"
@@ -27,6 +28,7 @@ const NAV_ITEMS: Array<{
   { section: "chat", label: "Chat", icon: MessageSquare },
   { section: "company-map", label: "Company Map", icon: Building2 },
   { section: "artifacts", label: "Artifacts", icon: FileStack },
+  { section: "hosted-page", label: "Hosted Page", icon: Globe2 },
 ]
 
 function getHref(
@@ -41,6 +43,10 @@ function getHref(
 
   if (section === "artifacts") {
     return artifactsPath(username, projectSlug)
+  }
+
+  if (section === "hosted-page") {
+    return hostedPagePath(username, projectSlug)
   }
 
   return conversationPath(username, projectSlug, activeConversationId)

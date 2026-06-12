@@ -20,7 +20,10 @@ import {
   createEmptyCompanyMap,
 } from "@/features/workspace/lib/empty-workspace"
 import { sortConversationsByRecent } from "@/features/workspace/data/conversation-meta"
-import { getOrCreateRequest } from "@/features/workspace/lib/workspace-request-cache"
+import {
+  getOrCreateRequest,
+  invalidateRequestCache,
+} from "@/features/workspace/lib/workspace-request-cache"
 import { measureWorkspaceTiming } from "@/features/workspace/lib/workspace-timing"
 
 function cachedProjectRequest<T>(
@@ -30,7 +33,10 @@ function cachedProjectRequest<T>(
   return getOrCreateRequest(key, action)
 }
 
-export type NonChatWorkspaceSection = "company-map" | "artifacts"
+export type NonChatWorkspaceSection =
+  | "company-map"
+  | "artifacts"
+  | "hosted-page"
 
 export type WorkspaceSliceState = {
   companyMap: boolean
@@ -155,14 +161,53 @@ export async function loadProjectSectionGlobals(
     }
   }
 
-  const [project, artifactHub] = await Promise.all([
+  if (section === "artifacts") {
+    const [project, artifactHub] = await Promise.all([
+      measureWorkspaceTiming(
+        "project core",
+        () =>
+          cachedProjectRequest(`project:${projectPublicId}`, () =>
+            getProject(projectPublicId)
+          ),
+        `${projectPublicId}:artifacts`
+      ),
+      measureWorkspaceTiming(
+        "artifacts",
+        () =>
+          cachedProjectRequest(`artifacts:${projectPublicId}`, () =>
+            listArtifacts(projectPublicId)
+          ),
+        projectPublicId
+      ),
+    ])
+
+    return {
+      project,
+      companyMap: createEmptyCompanyMap(projectPublicId),
+      artifactHub,
+      slices: {
+        companyMap: false,
+        artifactHub: true,
+      },
+    }
+  }
+
+  const [project, companyMap, artifactHub] = await Promise.all([
     measureWorkspaceTiming(
       "project core",
       () =>
         cachedProjectRequest(`project:${projectPublicId}`, () =>
           getProject(projectPublicId)
         ),
-      `${projectPublicId}:artifacts`
+      `${projectPublicId}:hosted-page`
+    ),
+    measureWorkspaceTiming(
+      "company map",
+      () =>
+        cachedProjectRequest(`company-map:${projectPublicId}`, () =>
+          getCompanyMap(projectPublicId)
+        ),
+      projectPublicId
     ),
     measureWorkspaceTiming(
       "artifacts",
@@ -176,10 +221,10 @@ export async function loadProjectSectionGlobals(
 
   return {
     project,
-    companyMap: createEmptyCompanyMap(projectPublicId),
+    companyMap,
     artifactHub,
     slices: {
-      companyMap: false,
+      companyMap: true,
       artifactHub: true,
     },
   }
@@ -235,8 +280,17 @@ export async function loadProjectSidebarData(
 }
 
 export async function loadProjectCaptureData(
-  projectPublicId: string
+  projectPublicId: string,
+  options?: { forceRefresh?: boolean }
 ): Promise<ProjectCaptureData> {
+  if (options?.forceRefresh) {
+    // The request cache memoizes forever; refresh-after-mutation must
+    // invalidate or it re-reads pre-mutation data (generation, pins, and
+    // candidate reviews would never appear without a hard reload).
+    invalidateRequestCache(`pins:${projectPublicId}`)
+    invalidateRequestCache(`company-map:${projectPublicId}`)
+    invalidateRequestCache(`artifacts:${projectPublicId}`)
+  }
   const [memoryPins, companyMap, artifactHub] = await Promise.all([
     cachedProjectRequest(`pins:${projectPublicId}`, () =>
       listPins(projectPublicId)

@@ -28,16 +28,24 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** Marketing-only routes skip blocking /me on first paint. */
+/** Public routes skip blocking /me on first paint. */
 const MARKETING_PATHS = new Set(["/"])
 const PUBLIC_SESSION_REDIRECT_PATHS = new Set(["/", "/login"])
 const PUBLIC_STATIC_PATHS = new Set(["/signup", "/auth/callback"])
+const PUBLIC_ROUTE_PREFIXES = ["/hosted/"]
+
+function isPublicRoute(pathname: string): boolean {
+  return (
+    PUBLIC_STATIC_PATHS.has(pathname) ||
+    PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  )
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const skipBlockingBootstrap =
-    MARKETING_PATHS.has(pathname) || PUBLIC_STATIC_PATHS.has(pathname)
+    MARKETING_PATHS.has(pathname) || isPublicRoute(pathname)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -60,8 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    if (PUBLIC_STATIC_PATHS.has(pathname)) {
-      setIsLoading(false)
+    if (isPublicRoute(pathname)) {
       return () => {
         cancelled = true
       }
@@ -91,7 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (MARKETING_PATHS.has(pathname)) {
-      setIsLoading(false)
       void resolveSession({ redirectIfAuthed: true })
       return () => {
         cancelled = true

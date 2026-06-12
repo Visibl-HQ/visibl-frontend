@@ -36,6 +36,10 @@ export function artifactsPath(username: string, projectSlug: string): string {
   return `/${username}/projects/${projectSlug}/artifacts`
 }
 
+export function hostedPagePath(username: string, projectSlug: string): string {
+  return `/${username}/projects/${projectSlug}/hosted-page`
+}
+
 export function projectPathFromProject(
   username: string,
   project: { name: string }

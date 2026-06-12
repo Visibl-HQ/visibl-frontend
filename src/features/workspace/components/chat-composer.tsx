@@ -33,7 +33,19 @@ export function ChatComposer({
   onImportFiles,
   className,
 }: ChatComposerProps) {
-  const [content, setContent] = useState("")
+  const [content, setContent] = useState(() => {
+    // One-shot prefill handoff from "Unlock this section in chat" affordances.
+    try {
+      const prefill = sessionStorage.getItem("visibl:chat-prefill")
+      if (prefill) {
+        sessionStorage.removeItem("visibl:chat-prefill")
+        return prefill
+      }
+    } catch {
+      // ignore storage failures
+    }
+    return ""
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [importError, setImportError] = useState<string | null>(null)

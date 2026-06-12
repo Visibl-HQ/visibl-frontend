@@ -49,6 +49,7 @@ import { IngestionPreviewDialog } from "@/features/ingestion/components/ingestio
 import { useIngestionFlow } from "@/features/ingestion/hooks/use-ingestion-flow"
 import { ArtifactHubPanel } from "@/features/workspace/components/artifact-hub-panel"
 import { CompanyMapPanel } from "@/features/workspace/components/company-map-panel"
+import { HostedPagePanel } from "@/features/hosted-page/components/hosted-page-panel"
 import { CheckpointToolbar } from "@/features/idea-history/components/checkpoint-toolbar"
 import {
   IdeaHistoryProvider,
@@ -189,13 +190,21 @@ function sliceMessagesForBranchView(
 function isNonChatWorkspaceSection(
   section: ReturnType<typeof resolveProjectWorkspaceSection>
 ): section is NonChatWorkspaceSection {
-  return section === "company-map" || section === "artifacts"
+  return (
+    section === "company-map" ||
+    section === "artifacts" ||
+    section === "hosted-page"
+  )
 }
 
 function hasWorkspaceSlice(
   slices: WorkspaceSliceState,
   section: NonChatWorkspaceSection
 ): boolean {
+  if (section === "hosted-page") {
+    return slices.companyMap && slices.artifactHub
+  }
+
   return section === "company-map" ? slices.companyMap : slices.artifactHub
 }
 
@@ -799,6 +808,10 @@ export function WorkspaceShell({
       return
     }
 
+    if (workspaceSection === "hosted-page") {
+      return
+    }
+
     const counterpartSection: NonChatWorkspaceSection =
       workspaceSection === "company-map" ? "artifacts" : "company-map"
 
@@ -1185,7 +1198,9 @@ export function WorkspaceShell({
   )
 
   const refreshCaptureState = useCallback(async () => {
-    const captureData = await loadProjectCaptureData(projectPublicId)
+    const captureData = await loadProjectCaptureData(projectPublicId, {
+      forceRefresh: true,
+    })
     setMemoryPins(captureData.memoryPins)
     patchProjectGlobals({
       companyMap: captureData.companyMap,
@@ -1646,8 +1661,10 @@ export function WorkspaceShell({
       <WorkspaceShellLayout
         username={username}
         projectSlug={projectSlug}
+        projectPublicId={projectPublicId}
         workspaceSection={workspaceSection}
         navConversationId={navConversationId}
+        onGenerationComplete={refreshCaptureState}
         workspace={workspace}
         workspaceSlices={workspaceSlices}
         conversationId={conversationId}
@@ -1749,8 +1766,10 @@ export function WorkspaceShell({
 type WorkspaceShellLayoutProps = {
   username: string
   projectSlug: string
+  projectPublicId: string
   workspaceSection: ReturnType<typeof resolveProjectWorkspaceSection>
   navConversationId: string
+  onGenerationComplete: () => void | Promise<void>
   workspace: WorkspaceRead
   workspaceSlices: WorkspaceSliceState
   conversationId: string
@@ -1833,8 +1852,10 @@ function WorkspaceSectionLoading({ label }: { label: string }) {
 function WorkspaceShellLayout({
   username,
   projectSlug,
+  projectPublicId,
   workspaceSection,
   navConversationId,
+  onGenerationComplete,
   workspace,
   workspaceSlices,
   conversationId,
@@ -2069,6 +2090,18 @@ function WorkspaceShellLayout({
                   onSelectArtifact={(artifact) => {
                     setSelectedArtifactId(artifact.id)
                   }}
+                  projectId={projectPublicId}
+                  onGenerationComplete={onGenerationComplete}
+                  onAskInChat={(question) => {
+                    try {
+                      sessionStorage.setItem("visibl:chat-prefill", question)
+                    } catch {
+                      // best-effort prefill
+                    }
+                    router.push(
+                      conversationPath(username, projectSlug, navConversationId)
+                    )
+                  }}
                 />
               ) : (
                 <WorkspaceSectionLoading
@@ -2076,6 +2109,23 @@ function WorkspaceShellLayout({
                     loadingWorkspaceSection === "artifacts"
                       ? "Loading Artifact Hub"
                       : "Preparing Artifact Hub"
+                  }
+                />
+              )
+            ) : null}
+            {workspaceSection === "hosted-page" ? (
+              workspaceSlices.companyMap && workspaceSlices.artifactHub ? (
+                <HostedPagePanel
+                  projectId={projectPublicId}
+                  artifactHub={workspace.artifact_hub}
+                  companyMap={workspace.company_map}
+                />
+              ) : (
+                <WorkspaceSectionLoading
+                  label={
+                    loadingWorkspaceSection === "hosted-page"
+                      ? "Loading Hosted Page"
+                      : "Preparing Hosted Page"
                   }
                 />
               )

@@ -228,12 +228,14 @@ export type CompanyMapCandidateRead = {
   updated_at: string
 }
 
+// Honest internal labels (goal-011): exports and share-safety do not exist
+// yet, so readiness never claims "Ready for PPT" / "Ready to share".
 export type ArtifactReadiness =
   | "Collecting"
   | "Draftable"
-  | "Ready for doc"
-  | "Ready for PPT"
-  | "Ready to share"
+  | "Version-ready"
+  | "Source-ready"
+  | "Share review required"
 
 export type SourceStrengthLabel =
   | "Missing"
@@ -277,6 +279,111 @@ export type ArtifactVersionState = {
   detail: string | null
 }
 
+export type ArtifactSourceRef = {
+  id: string
+  label: string
+  source_type: string
+  pin_public_id: string | null
+  message_public_id: string | null
+  document_id: string | null
+  document_label: string | null
+  summary: string
+}
+
+export type ArtifactContentSection = {
+  id: string
+  label: string
+  field_key: string
+  value: string
+  support_label: FieldSupportLabel
+  source_refs: ArtifactSourceRef[]
+  caveats: string[]
+}
+
+export type ArtifactDeckSlide = {
+  id: string
+  title: string
+  section_ids: string[]
+  speaker_notes: string
+}
+
+export type ArtifactGenerationMetadata = {
+  template_version: string
+  prompt_version: string
+  schema_version: number
+  model: string
+  generator: "llm" | "deterministic_fallback"
+  fallback_reason?: string
+  source_snapshot_schema_version: number
+}
+
+export type ArtifactVersionContent = {
+  schema_version: number
+  artifact_id: string
+  title: string
+  summary: string
+  source_snapshot_id: string
+  source_scope: string
+  sections: ArtifactContentSection[]
+  slides?: ArtifactDeckSlide[]
+  caveats: string[]
+  generation_metadata: ArtifactGenerationMetadata
+}
+
+export type ArtifactVersionRead = {
+  public_id: string
+  artifact_id: string
+  version_number: number
+  created_at: string
+  dependency_hash: string
+  is_stale: boolean
+  stale_reason: string | null
+  content_schema_version: number
+  content: ArtifactVersionContent
+  rendered_markdown: string | null
+  generation_label: string
+  share_safety_status: string
+  created_by_kind: string
+}
+
+export type ArtifactVersionPage = {
+  items: ArtifactVersionRead[]
+  next_cursor: string | null
+}
+
+export type GenerationJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+
+export type GenerationJobEventRead = {
+  event_type: string
+  message: string
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export type GenerationJobRead = {
+  public_id: string
+  project_public_id: string
+  job_type: string
+  status: GenerationJobStatus
+  artifact_id: string | null
+  attempt_count: number
+  progress: number
+  poll_interval_ms: number
+  safe_error: string | null
+  metadata_json: Record<string, unknown>
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+  updated_at: string
+  result_version: ArtifactVersionRead | null
+  events: GenerationJobEventRead[]
+}
+
 export type ArtifactRead = {
   id: string
   name: string
@@ -286,17 +393,167 @@ export type ArtifactRead = {
   blocker_count: number
   stale_status: ArtifactStaleStatus
   version_state: ArtifactVersionState | null
+  current_version: ArtifactVersionRead | null
+  can_create_version: boolean
+  create_version_disabled_reason: string | null
+  minimum_draft_field_keys: string[]
+  minimum_draft_satisfied_count: number
   next_best_action: NextBestAction
   blockers: ArtifactBlockerRead[]
   required_field_keys: string[]
   evidence: EvidenceRead[]
-  generation_disabled_reason: string
+  generation_disabled_reason: string | null
   export_disabled_reason: string
 }
 
 export type ArtifactHubRead = {
   project_public_id: string
   artifacts: ArtifactRead[]
+}
+
+export type HostedPageStatus =
+  | "draft"
+  | "private_share"
+  | "gated"
+  | "public"
+  | "archived"
+
+export type HostedPageVisibility = "hidden" | "summary" | "full"
+
+export type HostedPageArtifactSelection = {
+  artifact_id: string
+  artifact_version_id: string
+  visibility: HostedPageVisibility
+}
+
+export type HostedPageVisibilityConfig = {
+  target_status: HostedPageStatus
+  fields: Record<string, HostedPageVisibility>
+  artifacts: HostedPageArtifactSelection[]
+  allow_weak_private_claims?: boolean
+}
+
+export type ShareBlockerRead = {
+  id: string
+  scope: "field" | "artifact" | "page"
+  severity: "info" | "medium" | "high"
+  message: string
+  field_key: string | null
+  artifact_id: string | null
+  artifact_version_id: string | null
+}
+
+export type ShareSafetyReportRead = {
+  allowed: boolean
+  status: "pass" | "needs_review" | "blocked"
+  target_status: HostedPageStatus
+  blockers: ShareBlockerRead[]
+  source_dependency_hash: string | null
+}
+
+export type HostedPageRevisionRead = {
+  public_id: string
+  version_number: number
+  status: HostedPageStatus
+  source_dependency_hash: string
+  visibility_config: HostedPageVisibilityConfig
+  share_safety_report: ShareSafetyReportRead
+  created_at: string
+}
+
+export type HostedPageRead = {
+  public_id: string
+  project_public_id: string
+  slug: string
+  status: HostedPageStatus
+  cta_text: string | null
+  contact_method: string | null
+  gate_config_json: Record<string, unknown>
+  current_revision: HostedPageRevisionRead | null
+  current_revision_stale: boolean
+  public_url_path: string | null
+}
+
+export type HostedPagePreviewRead = {
+  share_safety: ShareSafetyReportRead
+  projection: HostedPageProjection | null
+}
+
+export type HostedPagePublishRead = {
+  page: HostedPageRead
+  share_token: string | null
+}
+
+export type HostedPageAnalyticsSummaryRead = {
+  page_views: number
+  cta_clicks: number
+  artifact_downloads: number
+  feedback_count: number
+  latest_objections: string[]
+}
+
+export type HostedPageFeedbackRead = {
+  public_id: string
+  page_public_id: string
+  revision_public_id: string
+  feedback_type: "comment" | "objection" | "intro_request" | "question"
+  body: string
+  contact_email: string | null
+  triage_status: "new" | "linked" | "dismissed"
+  metadata_json: Record<string, unknown>
+  created_at: string
+}
+
+export type HostedPageFeedbackLinkRead = {
+  feedback: HostedPageFeedbackRead
+  candidate_public_id: string | null
+}
+
+export type HostedPageProjectionField = {
+  key: string
+  label: string
+  value: string | null
+  summary: string | null
+  visibility: HostedPageVisibility
+  support_label: FieldSupportLabel
+}
+
+export type HostedPageProjectionSection = {
+  id: string
+  label: string
+  field_key: string
+  value: string
+  support_label: FieldSupportLabel
+}
+
+export type HostedPageProjectionArtifact = {
+  artifact_id: string
+  artifact_version_number: number
+  visibility: HostedPageVisibility
+  title: string
+  summary: string
+  sections: HostedPageProjectionSection[]
+}
+
+export type HostedPageProjection = {
+  schema_version: number
+  target_status: HostedPageStatus
+  fields: HostedPageProjectionField[]
+  artifacts: HostedPageProjectionArtifact[]
+  page?: {
+    public_id: string
+    slug: string
+    cta_text: string | null
+    contact_method: string | null
+  }
+}
+
+export type HostedPagePublicRead = {
+  public_id: string
+  slug: string
+  status: HostedPageStatus
+  revision_public_id: string
+  projection: HostedPageProjection
 }
 
 export type WorkspaceRead = {
